@@ -22,7 +22,7 @@ from urllib.parse import urlparse
 
 HOME = os.path.expanduser("~")
 APP = os.path.dirname(os.path.abspath(__file__))
-DATA = os.path.join(APP, "data")
+DATA = os.environ.get("CAPLAB_DATA") or os.path.join(APP, "data")
 PACKS = os.path.join(APP, "packs")
 PORT = int(os.environ.get("PORT", "8765"))
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build"}
@@ -212,7 +212,9 @@ def scan_import(src):
                               "description": fm.get("description", ""), "path": rp, "dir": os.path.relpath(dirpath, src),
                               "files": len(files), "has_code": bool(code),
                               "warning": ("Includes %d script file(s). Shell is off in tests, so scripts will not run." % len(code)) if code else ""})
-            elif low.endswith(".md") and (os.sep + "agents" in os.sep + rel) and fn != "README.md":
+            elif low.endswith(".md") and fn != "README.md" and (
+                    (os.sep + "agents" in os.sep + rel)
+                    or (lambda f: f.get("name") and f.get("description") and ("tools" in f or "model" in f))(frontmatter(read_text(p, 4000)))):
                 fm = frontmatter(read_text(p))
                 if fm.get("description") or fm.get("name"):
                     found.append({"type": "agent", "name": fm.get("name") or fn[:-3],
@@ -245,11 +247,12 @@ def normalize_git(value):
     if m:
         owner, repo, branch, sub = m.groups()
         sub = sub or ""
+        fname = ""
         if sub and re.search(r"\.[A-Za-z0-9]+$", os.path.basename(sub)):
-            sub = os.path.dirname(sub)  # a link to SKILL.md or another file: use its folder
-        return "https://github.com/%s/%s.git" % (owner, repo), sub, branch
+            sub, fname = os.path.dirname(sub), os.path.basename(sub)  # a link to one file: scan its folder
+        return "https://github.com/%s/%s.git" % (owner, repo), sub, branch, fname
     if re.match(r"^https://[\w.-]+/[\w./~-]+$", v):
-        return v, "", None  # another git host
+        return v, "", None, ""  # another git host
     raise ValueError("That doesn't look like a GitHub link. I received: %s" % (value.strip()[:200] or "(nothing)"))
 
 
@@ -261,8 +264,9 @@ def do_import(body):
     src = os.path.join(idir, "src")
     os.makedirs(idir)
     kind, value = body.get("kind"), (body.get("value") or "").strip()
+    fname = ""
     if kind == "git":
-        url, sub, branch = normalize_git(value)
+        url, sub, branch, fname = normalize_git(value)
         cmd = ["git", "-c", "core.hooksPath=/dev/null", "clone", "--depth", "1", "--no-recurse-submodules"]
         if branch:
             cmd += ["--branch", branch]
@@ -305,6 +309,9 @@ def do_import(body):
     else:
         raise ValueError("Unknown import kind")
     items = scan_import(scan_root)
+    if kind == "git" and fname and fname != "SKILL.md":
+        # A link to one agent or command file: offer just that file.
+        items = [i for i in items if os.path.basename(i["path"]) == fname] or items
     meta = {"id": iid, "kind": kind, "source": value if kind != "text" else "(pasted %s)" % body.get("text_type"),
             "root": scan_root, "items": items, "created": time.strftime("%Y-%m-%d %H:%M")}
     jsave(os.path.join(idir, "meta.json"), meta)
@@ -347,6 +354,94 @@ def build_candidate(body):
              "skills": skills, "agents": agents, "has_rules": bool(rules), "created": time.strftime("%Y-%m-%d %H:%M")}
     jsave(os.path.join(cdir, "meta.json"), cmeta)
     return cmeta
+
+
+A = "https://github.com/anthropics/skills/tree/main/skills/"
+SP = "https://github.com/obra/superpowers/tree/main/skills/"
+VA = "https://github.com/VoltAgent/awesome-claude-code-subagents/blob/main/categories/"
+CATALOG = [
+    {"group": "Writing and communication", "id": "doc-coauthoring", "title": "Document co-author", "by": "Anthropic", "kind": "skill",
+     "link": A + "doc-coauthoring",
+     "what": "Writes proposals, plans and decision docs with you: gathers context first, drafts section by section, then checks the doc reads well to someone new.",
+     "good_for": "Program proposals, funder memos, the operating procedures.",
+     "tasks": [{"prompt": "Help me write a one-page proposal to run a winter cohort of the Homebrew AI Club for 15 people.", "rubric": "Clear purpose, audience, format, dates and cost; asks for missing facts instead of inventing them; plain voice."},
+               {"prompt": "Draft a decision memo for my co-founder: should the fellowship keep $180 per path or move to a sliding scale?", "rubric": "States the decision, options, trade-offs and a recommendation in under a page; no invented data."}]},
+    {"group": "Writing and communication", "id": "internal-comms", "title": "Team updates and newsletters", "by": "Anthropic", "kind": "skill",
+     "link": A + "internal-comms",
+     "what": "House formats for status updates, newsletters, FAQs and leadership updates.",
+     "good_for": "Weekly notes to Tenni and Jamie, participant updates.",
+     "tasks": [{"prompt": "Write a short weekly update to the Bell AI team (Tenni and Jamie): 3 new applicants, the Thursday session moves to 5:30, and two payments still to chase.", "rubric": "Scannable, every item has an owner or next step, under 150 words."},
+               {"prompt": "Write a mid-term newsletter to fellowship participants: what's coming in weeks 4 to 6 and one ask for feedback.", "rubric": "Warm and specific, one clear ask, no hype words."}]},
+    {"group": "Thinking and judgment", "id": "discernment-nudge", "title": "Discernment nudge", "by": "Anthropic", "kind": "skill",
+     "link": A + "discernment-nudge",
+     "what": "After a draft, advice or estimate you might act on, adds a short note on what to double-check first.",
+     "good_for": "Fits the fellowship's judgment theme; a safety net on emails and estimates.",
+     "tasks": [{"prompt": "Estimate how many applicants we need to fill four cohorts of 12 if about 60% of applicants enroll. Then draft a two-line note to Tenni with the number.", "rubric": "Correct arithmetic (about 80), states its assumptions, flags what to verify."},
+               {"prompt": "Draft an email asking past participants to each recommend the fellowship to two friends.", "rubric": "Short, personal, one clear ask; points out anything I should check before sending."}]},
+    {"group": "Thinking and judgment", "id": "brainstorming", "title": "Brainstorming before planning", "by": "obra/superpowers", "kind": "skill",
+     "link": SP + "brainstorming",
+     "what": "Before any creative work or plan, asks questions one at a time and lays out options before settling on one. Meant for talks, programs and businesses as well as software.",
+     "good_for": "New paths, workshop designs, talks.",
+     "tasks": [{"prompt": "I want to add a spring path to the fellowship. Help me plan it.", "rubric": "Asks about goals and audience before proposing; offers two or three distinct options with trade-offs."},
+               {"prompt": "Help me design a 90-minute workshop on how to judge AI output.", "rubric": "Clarifies audience first; timed outline; at least one hands-on exercise."}]},
+    {"group": "Thinking and judgment", "id": "first-principles", "title": "First-principles thinker", "by": "VoltAgent", "kind": "agent",
+     "link": VA + "10-research-analysis/first-principles-thinking.md",
+     "what": "A helper agent that breaks a problem down to basics and rebuilds the answer, instead of reasoning from habit.",
+     "good_for": "Pricing, program format, strategy questions.",
+     "tasks": [{"prompt": "Should the fellowship stay small and in person, or grow online? Think it through from first principles.", "rubric": "Separates facts from assumptions; reaches a reasoned recommendation; names what would change it."}]},
+    {"group": "Thinking and judgment", "id": "assumption-mapping", "title": "Assumption mapper", "by": "VoltAgent", "kind": "agent",
+     "link": VA + "08-business-product/assumption-mapping.md",
+     "what": "A helper agent that lists the riskiest assumptions in an idea and what to test first.",
+     "good_for": "New programs and ventures before you commit.",
+     "tasks": [{"prompt": "Map the riskiest assumptions in a plan to run the Homebrew AI Club as a paid online course for 100 people.", "rubric": "Ranks assumptions by risk and uncertainty; proposes a cheap test for the top two."}]},
+    {"group": "Design", "id": "frontend-design", "title": "Distinctive web design", "by": "Anthropic", "kind": "skill",
+     "link": A + "frontend-design",
+     "what": "Guidance for web pages with a clear visual point of view rather than generic templates.",
+     "good_for": "bellaifellow.com pages, event pages.",
+     "tasks": [{"prompt": "Write a one-section landing page announcing a winter Homebrew AI Club cohort. Save it as index.html.", "rubric": "Looks considered rather than templated; readable on a phone; one clear call to action."}]},
+    {"group": "Design", "id": "theme-factory", "title": "Ready-made themes", "by": "Anthropic", "kind": "skill",
+     "link": A + "theme-factory",
+     "what": "Ten color-and-font themes for slides, docs and pages, or a new one made to order.",
+     "good_for": "Seminar handouts, one-pagers.",
+     "tasks": [{"prompt": "Make a one-page HTML handout for session 1 of How Society Shapes Technology, with a clean theme. Save it as handout.html.", "rubric": "Consistent fonts and colors; easy to read printed; content stays the focus."}]},
+    {"group": "For builders (Homebrew AI Club)", "id": "skill-creator", "title": "Skill creator", "by": "Anthropic", "kind": "skill",
+     "link": A + "skill-creator",
+     "what": "Helps you write a new skill and tighten its description so it fires at the right time.",
+     "good_for": "Fellows turning their own workflow into a skill.",
+     "note": "Some of its steps run programs, which tests switch off, so expect a partial picture.",
+     "tasks": [{"prompt": "Help me write a skill that drafts acceptance emails for the Bell AI Fellowship in my voice.", "rubric": "Produces a SKILL.md with a specific description and clear steps; asks for voice samples."}]},
+    {"group": "For builders (Homebrew AI Club)", "id": "systematic-debugging", "title": "Systematic debugging", "by": "obra/superpowers", "kind": "skill",
+     "link": SP + "systematic-debugging",
+     "what": "Finds the root cause of a bug before proposing a fix, instead of guessing.",
+     "good_for": "Fellows building their own tools.",
+     "tasks": [{"prompt": "This Python function should return the median of a list but is wrong for even-length lists:\n\ndef median(xs):\n    xs = sorted(xs)\n    return xs[len(xs)//2]\n\nFind the cause and fix it.", "rubric": "Explains the cause, fixes the even case correctly, mentions the empty-list edge case."}]},
+    {"group": "For builders (Homebrew AI Club)", "id": "writing-plans", "title": "Plan before building", "by": "obra/superpowers", "kind": "skill",
+     "link": SP + "writing-plans",
+     "what": "Turns a goal into a step-by-step build plan before any code is written.",
+     "good_for": "Fellows' projects; turning an idea into tasks.",
+     "tasks": [{"prompt": "I want a small tool that emails me each morning with new fellowship applicants from a Google Sheet. Write the build plan.", "rubric": "Ordered small steps, each checkable; names the pieces needed; no code yet."}]},
+]
+
+
+def quick_add(body):
+    entry = next((c for c in CATALOG if c["id"] == body.get("id")), None)
+    if not entry:
+        raise ValueError("Unknown catalog item")
+    meta = do_import({"kind": "git", "value": entry["link"]})
+    usable = [i["id"] for i in meta["items"] if not i.get("blocked")]
+    if not usable:
+        raise ValueError("Nothing usable was found at that link.")
+    cand = build_candidate({"import_id": meta["id"], "selected": usable, "name": entry["id"]})
+    tasks = jload(os.path.join(DATA, "tasks.json"), [])
+    have = {t["prompt"] for t in tasks}
+    added = 0
+    for t in entry.get("tasks", []):
+        if t["prompt"] not in have:
+            tasks.append({"id": "t" + uuid.uuid4().hex[:6], "prompt": t["prompt"], "rubric": t["rubric"],
+                          "enabled": True, "from": entry["id"]})
+            added += 1
+    jsave(os.path.join(DATA, "tasks.json"), tasks)
+    return {"candidate": cand, "tasks_added": added}
 
 
 def list_candidates():
@@ -807,6 +902,8 @@ class H(BaseHTTPRequestHandler):
             if path == "/api/setup":
                 return self.send({"found": scan_setup(), "saved": jload(os.path.join(DATA, "setup.json"), None),
                                   "roots": jload(os.path.join(DATA, "roots.json"), [])})
+            if path == "/api/catalog":
+                return self.send(CATALOG)
             if path == "/api/candidates":
                 return self.send(list_candidates())
             if path == "/api/imports":
@@ -842,6 +939,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send({"ok": True})
             if path == "/api/import":
                 return self.send(do_import(b))
+            if path == "/api/quick":
+                return self.send(quick_add(b))
             if path == "/api/candidate":
                 return self.send(build_candidate(b))
             if path == "/api/tasks":

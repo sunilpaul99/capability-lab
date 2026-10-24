@@ -177,11 +177,19 @@ async function saveRoots(){await api('/api/roots',{roots:$('#roots').value.split
 async function saveSetup(){const selected=[...document.querySelectorAll('.sp:checked')].map(x=>x.value);await api('/api/setup',{selected,extra:$('#extra').value.split('\n').map(x=>x.trim()).filter(Boolean),notes:$('#notes').value});S.done.setup=true;go(2)}
 
 V.add=async()=>{
-  S.cands=await api('/api/candidates');S.done.add=!!S.cands.length;
+  [S.cands,S.cat]=await Promise.all([api('/api/candidates'),S.cat?Promise.resolve(S.cat):api('/api/catalog')]);S.done.add=!!S.cands.length;
+  const haveNames=new Set(S.cands.map(c=>c.name));const groupsC=[...new Set(S.cat.map(c=>c.group))];
   const mode=S.addMode||'git';
   $('#main').innerHTML=`<h2>3. Add a new capability</h2>
   <p class="lead">Bring in a skill, agent, or set of rules you want to try. Point at a GitHub repo, a folder, or paste the text. The lab finds the usable pieces; nothing runs yet.</p>
-  <div class="card"><div class="tabs">${[['git','From GitHub'],['folder','From a folder'],['text','Paste text']].map(([k,t])=>`<button class="${mode==k?'on':''}" onclick="S.addMode='${k}';render()">${t}</button>`).join('')}</div>
+  <div class="card"><h3>Ready to try</h3><p class="muted" style="margin-top:0">Picked for your work. <b>Try it</b> downloads the capability and adds a few matching Bell AI test tasks to step 4.</p>
+   ${groupsC.map(g=>`<div style="margin-top:14px"><div class="muted" style="font-weight:600;text-transform:uppercase;font-size:11.5px;letter-spacing:.04em">${esc(g)}</div>
+    ${S.cat.filter(c=>c.group==g).map(c=>`<div class="item"><div class="grow"><b>${esc(c.title)}</b> <span class="tag">${esc(c.kind)}</span> <span class="muted">by ${esc(c.by)}</span>
+      <div>${esc(c.what)}</div><div class="muted">Good for: ${esc(c.good_for)}${c.note?` <span style="color:var(--warn)">${esc(c.note)}</span>`:''}</div>
+      <div class="muted"><a href="${esc(c.link)}" target="_blank" rel="noopener" style="color:inherit">View on GitHub</a> · ${c.tasks.length} test task${c.tasks.length>1?'s':''}</div></div>
+      ${haveNames.has(c.id)?'<span class="ok" style="white-space:nowrap">Added ✓</span>':`<button class="primary" onclick="quickAdd('${esc(c.id)}',this)">Try it</button>`}</div>`).join('')}</div>`).join('')}
+  </div>
+  <div class="card"><h3>Or bring your own</h3><div class="tabs">${[['git','From GitHub'],['folder','From a folder'],['text','Paste text']].map(([k,t])=>`<button class="${mode==k?'on':''}" onclick="S.addMode='${k}';render()">${t}</button>`).join('')}</div>
   ${mode=='git'?`<label>Repository or folder link</label><input type="text" id="val" placeholder="e.g. https://github.com/anthropics/skills/tree/main/skills/brand-guidelines">
      <div class="muted" style="margin-top:6px">Paste a link to a GitHub repo or to one folder inside it. <span class="open" onclick="$('#val').value='https://github.com/anthropics/skills/tree/main/skills/internal-comms';$('#ist').textContent=''">Use this example</span> (Anthropic's internal-comms skill, good for Bell AI emails).</div>`:''}
   ${mode=='folder'?`<label>Folder path</label><input type="text" id="val" placeholder="e.g. ~/Downloads/some-skill">`:''}
@@ -208,6 +216,10 @@ function showFound(m){
   ${m.items.length?m.items.map(i=>`<label class="item" style="margin:0;color:var(--ink)"><input type="checkbox" class="fi" value="${i.id}" ${i.blocked?'disabled':(usable.length<=3?'checked':'')}><div class="grow"><span class="tag ${i.blocked?'bad':''}">${esc(i.type)}</span> <b class="${i.blocked?'':'open'}" onclick="${i.blocked?'':`event.preventDefault();view(${esc(JSON.stringify(m.root+'/'+i.path))})`}">${esc(i.name)}</b><div class="muted">${esc(i.description).slice(0,220)}</div>${i.warning?`<div class="muted" style="color:var(--warn)">${esc(i.warning)}</div>`:''}<div class="muted mono">${esc(i.path)}</div></div></label>`).join(''):'<p class="muted">No skills, agents, or rules found here.</p>'}
   ${usable.length?`<label>Give this bundle a name</label><div class="row"><input type="text" id="cname" class="grow" value="${esc(usable.length==1?usable[0].name:'')}" style="width:auto"><button class="primary" onclick="makeCand()">Use selected</button></div>`:''}</div>`;
 }
+async function quickAdd(id,btn){btn.disabled=true;btn.textContent='Adding…';
+  try{const r=await api('/api/quick',{id});S.cand=r.candidate.id;save();await render();
+    const n=document.createElement('div');n.className='card';n.innerHTML=`<span class="ok">Added ${esc(r.candidate.name)}.</span> ${r.tasks_added} test task${r.tasks_added==1?'':'s'} added to step 4. Add more, or click Next.`;$('#main h2').after(n)}
+  catch(e){btn.disabled=false;btn.textContent='Try it';alert(e.message)}}
 async function makeCand(){const selected=[...document.querySelectorAll('.fi:checked')].map(x=>x.value);try{const c=await api('/api/candidate',{import_id:S.imp.id,selected,name:$('#cname').value});S.cand=c.id;S.imp=null;save();render()}catch(e){alert(e.message)}}
 
 V.tasks=async()=>{
