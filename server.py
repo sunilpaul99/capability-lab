@@ -231,24 +231,51 @@ def scan_import(src):
     return found
 
 
+def normalize_git(value):
+    """Accept the link shapes people actually paste: with or without https://, .git, trailing slash,
+    ?query or #anchor, and /tree/ or /blob/ links to a folder or a single file in it."""
+    v = value.strip().strip('"').strip("'").strip("<>")
+    v = re.sub(r"[?#].*$", "", v).rstrip("/")
+    if v.startswith("git@github.com:"):
+        v = "https://github.com/" + v.split(":", 1)[1]
+    if re.match(r"^(www\.)?github\.com/", v):
+        v = "https://" + v
+    v = v.replace("http://", "https://", 1).replace("://www.github.com/", "://github.com/")
+    m = re.match(r"^https://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?(?:/(?:tree|blob)/([^/]+)(?:/(.*))?)?$", v)
+    if m:
+        owner, repo, branch, sub = m.groups()
+        sub = sub or ""
+        if sub and re.search(r"\.[A-Za-z0-9]+$", os.path.basename(sub)):
+            sub = os.path.dirname(sub)  # a link to SKILL.md or another file: use its folder
+        return "https://github.com/%s/%s.git" % (owner, repo), sub, branch
+    if re.match(r"^https://[\w.-]+/[\w./~-]+$", v):
+        return v, "", None  # another git host
+    raise ValueError("That doesn't look like a GitHub link. I received: %s" % (value.strip()[:200] or "(nothing)"))
+
+
 def do_import(body):
+    if body.get("kind") == "git":
+        normalize_git(body.get("value") or "")  # reject bad links before creating anything
     iid = uuid.uuid4().hex[:8]
     idir = os.path.join(DATA, "imports", iid)
     src = os.path.join(idir, "src")
     os.makedirs(idir)
     kind, value = body.get("kind"), (body.get("value") or "").strip()
     if kind == "git":
-        if not re.match(r"^https://[\w.-]+/[\w./-]+$", value):
-            raise ValueError("That doesn't look like a GitHub link. It should start with https://github.com/")
-        url = value
-        sub = ""
-        m = re.match(r"^(https://github\.com/[^/]+/[^/]+)/tree/[^/]+/(.+)$", value)
-        if m:
-            url, sub = m.group(1), m.group(2)
-        r = subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "clone", "--depth", "1",
-                            "--no-recurse-submodules", url, src], capture_output=True, text=True, timeout=180, cwd=DATA)
+        url, sub, branch = normalize_git(value)
+        cmd = ["git", "-c", "core.hooksPath=/dev/null", "clone", "--depth", "1", "--no-recurse-submodules"]
+        if branch:
+            cmd += ["--branch", branch]
+        r = subprocess.run(cmd + [url, src], capture_output=True, text=True, timeout=180, cwd=DATA)
         if r.returncode != 0:
-            raise ValueError("git clone failed: " + r.stderr[-400:])
+            shutil.rmtree(idir, ignore_errors=True)
+            msg = r.stderr.strip().splitlines()[-1] if r.stderr.strip() else "unknown error"
+            if "not found" in msg.lower() or "could not read" in msg.lower():
+                msg = "GitHub couldn't find %s. Check the link, and that the repo is public." % url
+            raise ValueError("Download failed: " + msg)
+        if sub and not os.path.isdir(os.path.join(src, sub)):
+            shutil.rmtree(idir, ignore_errors=True)
+            raise ValueError("The repo downloaded, but it has no folder named %s." % sub)
         scan_root = os.path.join(src, sub) if sub else src
     elif kind == "folder":
         p = under_home(value)
