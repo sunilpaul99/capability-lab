@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capability Lab</title>
+<style>
+:root{
+  --bg:#f7f6f3;--panel:#fff;--ink:#1d1d1b;--muted:#6b6a65;--line:#e4e2dc;
+  --accent:#2b5e8c;--accent-ink:#fff;--good:#1f8f5f;--bad:#b4442c;--warn:#a46a00;--soft:#eef3f8;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#151513;--panel:#1e1e1c;--ink:#ecebe6;--muted:#a09e96;--line:#34332f;
+  --accent:#7fb0dc;--accent-ink:#0d1a26;--good:#5cc896;--bad:#e8826b;--warn:#e0b04f;--soft:#1f2a35;}}
+:root[data-theme="dark"]{--bg:#151513;--panel:#1e1e1c;--ink:#ecebe6;--muted:#a09e96;--line:#34332f;
+  --accent:#7fb0dc;--accent-ink:#0d1a26;--good:#5cc896;--bad:#e8826b;--warn:#e0b04f;--soft:#1f2a35;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.wrap{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+nav{border-right:1px solid var(--line);padding:24px 16px;position:sticky;top:0;height:100vh}
+nav h1{font-size:17px;margin:0 0 4px}
+nav .sub{color:var(--muted);font-size:13px;margin-bottom:24px}
+.step{display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:8px;cursor:pointer;color:var(--muted);margin-bottom:2px}
+.step:hover{background:var(--soft)}
+.step.active{background:var(--soft);color:var(--ink);font-weight:600}
+.num{width:24px;height:24px;border-radius:50%;border:1.5px solid currentColor;display:grid;place-items:center;font-size:12px;flex:none}
+.step.done .num{background:var(--good);border-color:var(--good);color:#fff}
+main{padding:32px 40px;max-width:980px}
+h2{margin:0 0 6px;font-size:24px}
+.lead{color:var(--muted);margin:0 0 22px;max-width:680px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:16px}
+.card h3{margin:0 0 10px;font-size:15px}
+button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;border-radius:8px;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button:disabled{opacity:.5;cursor:default}
+input[type=text],input[type=number],textarea,select{font:inherit;width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+textarea{min-height:90px;resize:vertical}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grow{flex:1}
+.item{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line)}
+.item:first-child{border-top:none}
+.item input[type=checkbox]{margin-top:4px}
+.tag{font-size:11px;padding:2px 7px;border-radius:99px;background:var(--soft);color:var(--accent);white-space:nowrap}
+.tag.warn{color:var(--warn)} .tag.bad{color:var(--bad)}
+.muted{color:var(--muted);font-size:13px}
+.ok{color:var(--good);font-weight:600} .err{color:var(--bad)}
+code,.mono{font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+pre{white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;max-height:340px;overflow:auto;font-size:13px;margin:6px 0}
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tabs button.on{background:var(--soft);border-color:var(--accent);color:var(--accent)}
+.next{margin-top:20px;display:flex;justify-content:flex-end;gap:10px}
+.big{font-size:28px;font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.stat .muted{font-size:12px}
+.verdict{font-size:18px;font-weight:600;margin:4px 0 6px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+.bar>div{height:100%;background:var(--accent);transition:width .4s}
+.win{color:var(--good)} .loss{color:var(--bad)}
+details summary{cursor:pointer}
+@media (max-width:760px){.wrap{grid-template-columns:1fr}nav{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}
+  main{padding:20px 16px}.cols,.stats{grid-template-columns:1fr 1fr}}
+@media (max-width:480px){.cols,.stats{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <h1>Capability Lab</h1>
+  <div class="sub">Find out whether a new skill, agent, or rule actually improves your Claude.</div>
+  <div id="steps"></div>
+</nav>
+<main id="main"></main>
+</div>
+<script>
+const STEPS=[
+ {k:'connect',t:'Connect'},
+ {k:'setup',t:'Your current setup'},
+ {k:'add',t:'Add a new capability'},
+ {k:'tasks',t:'Pick test tasks'},
+ {k:'run',t:'Run the comparison'},
+ {k:'results',t:'Results and decision'},
+];
+const S={step:0,done:{},conn:null,setup:null,cands:[],cand:null,imp:null,tasks:[],runId:null};
+try{S.step=+localStorage.getItem('cl-step')||0;S.cand=localStorage.getItem('cl-cand');S.runId=localStorage.getItem('cl-run')}catch(e){}
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function api(p,b){const r=await fetch(p,b?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}:{});const j=await r.json();if(!r.ok)throw new Error(j.error||'Request failed');return j}
+function save(){try{localStorage.setItem('cl-step',S.step);S.cand&&localStorage.setItem('cl-cand',S.cand);S.runId&&localStorage.setItem('cl-run',S.runId)}catch(e){}}
+function nav(){ $('#steps').innerHTML=STEPS.map((s,i)=>`<div class="step ${i==S.step?'active':''} ${S.done[s.k]?'done':''}" onclick="go(${i})"><span class="num">${S.done[s.k]?'✓':i+1}</span>${s.t}</div>`).join('') }
+function go(i){S.step=i;save();render()}
+function nextBtn(label='Next'){return `<div class="next">${S.step>0?`<button onclick="go(${S.step-1})">Back</button>`:''}<button class="primary" onclick="go(${S.step+1})">${label} →</button></div>`}
+let chain=Promise.resolve();function render(){chain=chain.then(_render,_render);return chain}
+async function _render(){nav();const k=STEPS[S.step].k;$('#main').innerHTML='<p class="muted">Loading…</p>';try{await V[k]()}catch(e){$('#main').innerHTML=`<p class="err">${esc(e.message)}</p>`}nav()}
+
+const V={};
+V.connect=async()=>{
+  const c=S.conn=await api('/api/connect');S.done.connect=c.logged_in;
+  $('#main').innerHTML=`<h2>1. Connect to Claude</h2>
+  <p class="lead">The lab runs Claude Code in the background to test things. It needs the Claude Code program and a signed-in account.</p>
+  <div class="card">
+   <div class="item"><div class="grow"><b>Claude Code program</b><div class="muted mono">${esc(c.cli||'not found')}</div></div>${c.cli?'<span class="ok">Found</span>':'<span class="err">Missing</span>'}</div>
+   <div class="item"><div class="grow"><b>Signed in</b>${c.version?`<div class="muted">${esc(c.version)}</div>`:''}</div>${c.logged_in?'<span class="ok">Yes</span>':'<span class="err">Not yet</span>'}</div>
+  </div>
+  ${c.cli&&!c.logged_in?`<div class="card"><h3>One-time sign-in</h3>
+   <p>Open the Terminal app, paste this line, and press Return. A browser window opens; sign in with your Claude account. Then come back and click <b>Check again</b>.</p>
+   <pre class="mono" id="lc">${esc(c.login_command)}</pre>
+   <div class="row"><button onclick="navigator.clipboard.writeText(document.getElementById('lc').textContent);this.textContent='Copied'">Copy</button><button class="primary" onclick="render()">Check again</button></div></div>`:''}
+  ${!c.cli?`<div class="card"><p>Install the Claude desktop app or Claude Code, then click Check again.</p><button onclick="render()">Check again</button></div>`:''}
+  ${c.logged_in?nextBtn():''}`;
+};
+
+V.setup=async()=>{
+  const d=S.setup=await api('/api/setup');
+  const sel=new Set(d.saved?d.saved.selected:d.found.filter(f=>f.default).map(f=>f.path));
+  S.done.setup=!!d.saved;
+  const blocked=d.found.filter(f=>f.kind=='blocked');d.found=d.found.filter(f=>f.kind!='blocked');
+  const groups={};d.found.forEach(f=>(groups[f.kind]=groups[f.kind]||[]).push(f));
+  $('#main').innerHTML=`<h2>2. Your current setup</h2>
+  <p class="lead">This is the "before" in the comparison. Tick everything that shapes how Claude works for you today: memory, standing rules, voice guides. Every test runs with these, and the "after" adds the new capability on top.</p>
+  ${Object.keys(groups).map(g=>`<div class="card"><h3>${esc(g[0].toUpperCase()+g.slice(1))} <span class="muted">(${groups[g].length})</span></h3>
+   ${groups[g].map(f=>`<label class="item" style="margin:0;color:var(--ink)"><input type="checkbox" class="sp" value="${esc(f.path)}" ${sel.has(f.path)?'checked':''}><div class="grow"><div>${esc(f.label.split('/').pop())}</div><div class="muted mono">${esc(f.label)} · ${Math.round(f.size/1000)} KB</div></div></label>`).join('')}</div>`).join('')||'<div class="card muted">Nothing found yet. Add a folder below.</div>'}
+  ${blocked.length?`<div class="card" style="border-color:var(--warn)"><b>macOS blocked reading:</b> <span class="mono">${blocked.map(b=>esc(b.label)).join(', ')}</span><p class="muted">Start the lab by double-clicking <b>Start Capability Lab</b> in Finder (it runs from Terminal, which has access), or add files one by one below.</p></div>`:''}
+  <div class="card"><h3>Other files to include</h3><p class="muted">Paste the full path of any file Claude should treat as your standing rules, one per line. Tip: drag a file from Finder into this box.</p>
+   <textarea id="extra" style="min-height:60px" class="mono">${esc((d.saved&&d.saved.extra||[]).join('\n'))}</textarea></div>
+  <div class="card"><h3>Folders to look in</h3><p class="muted">Project folders that hold instruction files or rules pages (CLAUDE.md, voice guides, procedures). One per line.</p>
+   <textarea id="roots" style="min-height:60px" class="mono">${esc(d.roots.join('\n'))}</textarea><div class="row" style="margin-top:8px"><button onclick="saveRoots()">Rescan</button></div></div>
+  <div class="card"><h3>Anything else Claude should always know</h3><textarea id="notes" placeholder="e.g. I run the Bell AI Fellowship. Plain voice, no hype words.">${esc(d.saved?d.saved.notes:'')}</textarea></div>
+  <div class="next"><button onclick="go(0)">Back</button><button class="primary" onclick="saveSetup()">Save and continue →</button></div>`;
+};
+async function saveRoots(){await api('/api/roots',{roots:$('#roots').value.split('\n').map(s=>s.trim()).filter(Boolean)});render()}
+async function saveSetup(){const selected=[...document.querySelectorAll('.sp:checked')].map(x=>x.value);await api('/api/setup',{selected,extra:$('#extra').value.split('\n').map(x=>x.trim()).filter(Boolean),notes:$('#notes').value});S.done.setup=true;go(2)}
+
+V.add=async()=>{
+  S.cands=await api('/api/candidates');S.done.add=!!S.cands.length;
+  const mode=S.addMode||'git';
+  $('#main').innerHTML=`<h2>3. Add a new capability</h2>
+  <p class="lead">Bring in a skill, agent, or set of rules you want to try. Point at a GitHub repo, a folder, or paste the text. The lab finds the usable pieces; nothing runs yet.</p>
+  <div class="card"><div class="tabs">${[['git','From GitHub'],['folder','From a folder'],['text','Paste text']].map(([k,t])=>`<button class="${mode==k?'on':''}" onclick="S.addMode='${k}';render()">${t}</button>`).join('')}</div>
+  ${mode=='git'?`<label>Repository or folder link</label><input type="text" id="val" placeholder="https://github.com/anthropics/skills/tree/main/skills/brand-guidelines">`:''}
+  ${mode=='folder'?`<label>Folder path</label><input type="text" id="val" placeholder="~/Downloads/some-skill">`:''}
+  ${mode=='text'?`<div class="row"><div class="grow"><label>Name</label><input type="text" id="tname" placeholder="plain-voice-editor"></div><div><label>Type</label><select id="ttype"><option value="skill">Skill</option><option value="agent">Agent</option><option value="rule">Rules (always on)</option></select></div></div>
+     <label>When should Claude use it? (one line, skills and agents)</label><input type="text" id="tdesc" placeholder="Use when editing prose the user will publish">
+     <label>Instructions</label><textarea id="val" style="min-height:160px" placeholder="Paste the SKILL.md, agent definition, or rules here"></textarea>`:''}
+  <div class="row" style="margin-top:12px"><button class="primary" id="scanb" onclick="doImport('${mode}')">Find capabilities</button><span id="ist" class="muted"></span></div></div>
+  <div id="found"></div>
+  ${S.cands.length?`<div class="card"><h3>Ready to test</h3>${S.cands.map(c=>`<label class="item" style="margin:0;color:var(--ink)"><input type="radio" name="cand" value="${esc(c.id)}" ${S.cand==c.id?'checked':''} onchange="S.cand=this.value;save()"><div class="grow"><b>${esc(c.name)}</b> ${c.skills.map(s=>`<span class="tag">skill: ${esc(s)}</span>`).join(' ')} ${c.agents.map(s=>`<span class="tag">agent: ${esc(s)}</span>`).join(' ')} ${c.has_rules?'<span class="tag">rules</span>':''}<div class="muted">${esc(c.source)} · ${esc(c.created)}</div></div></label>`).join('')}</div>`:''}
+  ${S.cands.length?nextBtn():''}`;
+  if(S.imp)showFound(S.imp);
+};
+async function doImport(kind){
+  const b={kind,value:$('#val').value};
+  if(kind=='text'){b.name=$('#tname').value;b.text_type=$('#ttype').value;b.description=$('#tdesc').value}
+  $('#scanb').disabled=true;$('#ist').textContent=kind=='git'?'Downloading and scanning…':'Scanning…';
+  try{S.imp=await api('/api/import',b);showFound(S.imp);$('#ist').textContent=''}catch(e){$('#ist').innerHTML=`<span class="err">${esc(e.message)}</span>`}
+  $('#scanb').disabled=false;
+}
+function showFound(m){
+  const usable=m.items.filter(i=>!i.blocked);
+  $('#found').innerHTML=`<div class="card"><h3>Found in ${esc(m.source)}</h3>
+  ${m.items.length?m.items.map(i=>`<label class="item" style="margin:0;color:var(--ink)"><input type="checkbox" class="fi" value="${i.id}" ${i.blocked?'disabled':(usable.length<=3?'checked':'')}><div class="grow"><span class="tag ${i.blocked?'bad':''}">${esc(i.type)}</span> <b>${esc(i.name)}</b><div class="muted">${esc(i.description).slice(0,220)}</div>${i.warning?`<div class="muted" style="color:var(--warn)">${esc(i.warning)}</div>`:''}<div class="muted mono">${esc(i.path)}</div></div></label>`).join(''):'<p class="muted">No skills, agents, or rules found here.</p>'}
+  ${usable.length?`<label>Give this bundle a name</label><div class="row"><input type="text" id="cname" class="grow" value="${esc(usable.length==1?usable[0].name:'')}" style="width:auto"><button class="primary" onclick="makeCand()">Use selected</button></div>`:''}</div>`;
+}
+async function makeCand(){const selected=[...document.querySelectorAll('.fi:checked')].map(x=>x.value);try{const c=await api('/api/candidate',{import_id:S.imp.id,selected,name:$('#cname').value});S.cand=c.id;S.imp=null;save();render()}catch(e){alert(e.message)}}
+
+V.tasks=async()=>{
+  S.tasks=await api('/api/tasks');S.done.tasks=S.tasks.some(t=>t.enabled!==false);
+  $('#main').innerHTML=`<h2>4. Pick test tasks</h2>
+  <p class="lead">Use real things you ask Claude to do. Each task runs twice: once with your current setup, once with the new capability added. Five to ten tasks is a good start. A one-line "what good looks like" makes the judging much sharper.</p>
+  <div id="tl"></div>
+  <div class="card"><h3>Add a task</h3><textarea id="np" placeholder="What you'd ask Claude"></textarea><label>What good looks like (optional)</label><input type="text" id="nr" placeholder="e.g. Under 150 words, plain voice, one clear ask">
+   <div class="row" style="margin-top:10px"><button class="primary" onclick="addTask()">Add</button><button onclick="suggest('starters')">Bell AI starter set</button><button onclick="suggest('history')">Pick from my past Claude sessions</button></div></div>
+  <div id="sugg"></div>${nextBtn()}`;
+  drawTasks();
+};
+function drawTasks(){
+  $('#tl').innerHTML=S.tasks.length?`<div class="card"><h3>Your test set (${S.tasks.filter(t=>t.enabled!==false).length} on)</h3>${S.tasks.map((t,i)=>`<div class="item"><input type="checkbox" ${t.enabled!==false?'checked':''} onchange="S.tasks[${i}].enabled=this.checked;putTasks()"><div class="grow"><div>${esc(t.prompt)}</div>${t.rubric?`<div class="muted">Good = ${esc(t.rubric)}</div>`:''}</div><button onclick="S.tasks.splice(${i},1);putTasks()">Remove</button></div>`).join('')}</div>`:'';
+}
+async function putTasks(){const r=await api('/api/tasks',{tasks:S.tasks});S.tasks=r.tasks;S.done.tasks=S.tasks.length>0;drawTasks();nav()}
+function addTask(){const p=$('#np').value.trim();if(!p)return;S.tasks.push({prompt:p,rubric:$('#nr').value.trim(),enabled:true});$('#np').value='';$('#nr').value='';putTasks()}
+async function suggest(kind){
+  const s=await api('/api/tasks/suggest');const list=s[kind];window._sg=list;
+  $('#sugg').innerHTML=`<div class="card"><h3>${kind=='starters'?'Bell AI starter set':'From your recent sessions'}</h3>${list.length?list.map((t,i)=>`<label class="item" style="margin:0;color:var(--ink)"><input type="checkbox" class="sg" value="${i}"><div class="grow">${esc(t.prompt.slice(0,400))}${t.from?`<div class="muted">${t.from}</div>`:''}${t.rubric?`<div class="muted">Good = ${esc(t.rubric)}</div>`:''}</div></label>`).join(''):'<p class="muted">Nothing found.</p>'}
+  <div class="row" style="margin-top:10px"><button class="primary" onclick="addSugg()">Add selected</button></div>${kind=='history'?'<p class="muted">Tasks that need email, calendar, or the web won\'t work here: tests run with no connectors, shell, or internet.</p>':''}</div>`;
+}
+function addSugg(){[...document.querySelectorAll('.sg:checked')].forEach(x=>{const t=window._sg[+x.value];S.tasks.push({prompt:t.prompt,rubric:t.rubric||'',enabled:true})});$('#sugg').innerHTML='';putTasks()}
+
+V.run=async()=>{
+  const [cands,tasks,runs]=await Promise.all([api('/api/candidates'),api('/api/tasks'),api('/api/runs')]);
+  const on=tasks.filter(t=>t.enabled!==false);const cand=cands.find(c=>c.id==S.cand)||cands[0];
+  $('#main').innerHTML=`<h2>5. Run the comparison</h2>
+  <p class="lead">Each task runs in an empty scratch folder with no shell, web, or connectors, so nothing an imported capability does can touch your files. A separate Claude then reads both answers blind and picks the better one.</p>
+  <div class="card"><label>Capability to test</label><select id="rc">${cands.map(c=>`<option value="${esc(c.id)}" ${cand&&c.id==cand.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+   <div class="row"><div class="grow"><label>Runs per task (more = steadier result)</label><select id="rr"><option>1</option><option selected>2</option><option>3</option></select></div>
+   <div class="grow"><label>Model</label><select id="rm"><option value="">Default</option><option value="sonnet">Sonnet</option><option value="opus">Opus</option><option value="haiku">Haiku (cheap)</option></select></div>
+   <div class="grow"><label>Spending cap per run (USD)</label><input type="number" id="rb" value="1" step="0.25" min="0.1"></div></div>
+   <p class="muted" id="est"></p>
+   <div class="row"><button class="primary" id="go" ${!cand||!on.length?'disabled':''} onclick="startRun()">Start</button><span id="rst" class="err"></span></div></div>
+  <div id="prog"></div>
+  ${runs.length?`<div class="card"><h3>Earlier runs</h3>${runs.map(r=>`<div class="item"><div class="grow"><b>${esc(r.candidate)}</b> · ${r.tasks} tasks · <span class="muted">${r.id}</span>${r.summary?`<div class="muted">${r.summary.wins} better · ${r.summary.losses} worse · ${r.summary.ties} tie</div>`:`<div class="muted">${r.state}</div>`}</div><button onclick="S.runId='${r.id}';save();go(5)">Open</button></div>`).join('')}</div>`:''}`;
+  const est=()=>{const n=on.length*(+$('#rr').value);$('#est').textContent=`${on.length} tasks × ${$('#rr').value} runs × 2 setups = ${n*2} test runs, plus ${n} judgments. Worst-case spend ≈ $${(n*2*+$('#rb').value+n*0.5).toFixed(2)}; typical is far lower.`};
+  ['#rr','#rb'].forEach(s=>$(s).oninput=est);est();
+  if(S.live)poll();
+};
+async function startRun(){
+  $('#go').disabled=true;
+  try{const r=await api('/api/run',{candidate_id:$('#rc').value,reps:$('#rr').value,model:$('#rm').value,budget:$('#rb').value});S.runId=r.id;S.cand=$('#rc').value;S.live=true;save();poll()}
+  catch(e){$('#rst').textContent=e.message;$('#go').disabled=false}
+}
+async function poll(){
+  if(!S.runId)return;const r=await api('/api/run/'+S.runId);const l=r.live;
+  if(!l||l.state=='done'){S.live=false;S.done.run=true;if(STEPS[S.step].k=='run')go(5);return}
+  const p=$('#prog');if(!p)return;
+  p.innerHTML=`<div class="card"><h3>Running… ${l.done} of ${l.total}</h3><div class="bar"><div style="width:${100*l.done/l.total}%"></div></div><pre class="mono" style="max-height:180px">${esc(l.log.slice(-8).join('\n'))||'Starting…'}</pre><p class="muted">You can leave this page open; it keeps going.</p></div>`;
+  setTimeout(poll,3000);
+}
+
+V.results=async()=>{
+  if(!S.runId){$('#main').innerHTML=`<h2>6. Results</h2><p class="lead">No run yet.</p>`;return}
+  const r=await api('/api/run/'+S.runId);const s=r.summary;
+  if(!s){$('#main').innerHTML=`<h2>6. Results</h2><p class="lead">Still running.</p><div id="prog"></div>`;S.live=true;poll();return}
+  S.done.results=true;const cand=r.config.candidate;const tasks=r.config.tasks;
+  const by=(t,v,rep)=>r.results.find(x=>x.task_id==t&&x.variant==v&&x.rep==rep);
+  $('#main').innerHTML=`<h2>6. Results: ${esc(cand.name)}</h2>
+  <div class="card"><div class="verdict">${esc(s.verdict)}</div><div class="muted">${esc(s.trigger)} ${s.errors?`<span class="err">${s.errors} run(s) had errors.</span>`:''}</div></div>
+  <div class="stats">
+   <div class="stat"><div class="big win">${s.wins}</div><div class="muted">better with it</div></div>
+   <div class="stat"><div class="big loss">${s.losses}</div><div class="muted">better without it</div></div>
+   <div class="stat"><div class="big">${s.ties}</div><div class="muted">tie</div></div>
+   <div class="stat"><div class="big" style="font-size:20px">$${s.cost_with.toFixed(3)}</div><div class="muted">avg cost with (vs $${s.cost_baseline.toFixed(3)}) · ${s.secs_with}s vs ${s.secs_baseline}s</div></div>
+  </div>
+  <h3 style="margin:24px 0 10px">Task by task</h3>
+  ${tasks.map(t=>r.judgments.filter(j=>j.task_id==t.id).map(j=>{const b=by(t.id,'baseline',j.rep),w=by(t.id,'with',j.rep);return `<div class="card"><div class="row"><b class="grow">${esc(t.prompt.slice(0,160))}</b><span class="tag ${j.winner=='with'?'':j.winner=='baseline'?'bad':'warn'}">${j.winner=='with'?'better with it':j.winner=='baseline'?'better without':'tie'}</span></div>
+   <p class="muted">${esc(j.reason)}${w&&w.used_capability.length?` · used: ${esc(w.used_capability.join(', '))}`:''}</p>
+   <details><summary class="muted">Compare the two answers</summary><div class="cols"><div><b>Without</b>${(j.issues_baseline||[]).length?`<div class="muted err">${esc(j.issues_baseline.join('; '))}</div>`:''}<pre>${esc(ans(b))}</pre></div><div><b>With ${esc(cand.name)}</b>${(j.issues_with||[]).length?`<div class="muted err">${esc(j.issues_with.join('; '))}</div>`:''}<pre>${esc(ans(w))}</pre></div></div></details></div>`}).join('')).join('')}
+  <div class="card"><h3>Decide</h3><p class="muted">Install copies the skills and agents into your Claude Code folder (~/.claude) so every session can use them. Share makes a zip with the capability and these results, for Fellows or anyone else.</p>
+   <div class="row"><button class="primary" onclick="adopt('install')">Install for me</button><button onclick="adopt('pack')">Make a shareable pack</button><button onclick="go(2)">Try something else</button></div><div id="ad" style="margin-top:10px"></div></div>`;
+};
+function ans(x){if(!x)return'(missing)';let s=x.output||'';for(const[k,v]of Object.entries(x.files||{}))s+=`\n\n[file: ${k}]\n${v}`;if(x.error)s+=`\n\n[error: ${x.error}]`;return s}
+async function adopt(mode){
+  if(mode=='install'&&!confirm('Copy this capability into ~/.claude so all your Claude Code sessions can use it?'))return;
+  try{const r=await api('/api/adopt',{candidate_id:(await api('/api/run/'+S.runId)).config.candidate.id,mode,run_id:S.runId});
+   $('#ad').innerHTML=mode=='pack'?`<span class="ok">Pack saved:</span> <span class="mono">${esc(r.path)}</span> <button onclick="api('/api/open',{path:'${esc(r.path)}'})">Show in Finder</button>`:
+    `<span class="ok">Installed.</span> <span class="muted mono">${esc(r.installed.join(', ')||'(no skills or agents)')}</span>${r.rules_to_copy?`<p class="muted">Rules aren't installed automatically. Add this to your memory or CLAUDE.md if you want it always on:</p><pre>${esc(r.rules_to_copy)}</pre>`:''}`}
+  catch(e){$('#ad').innerHTML=`<span class="err">${esc(e.message)}</span>`}
+}
+render();
+</script>
+</body>
+</html>
