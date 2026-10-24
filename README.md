@@ -30,7 +30,8 @@ Or from Terminal: `python3 server.py`
 3. **Add a new capability.** Pick one of eleven vetted capabilities with **Try it** (Anthropic's skills, obra/superpowers, VoltAgent agents), each with matching test tasks. Or bring your own: a GitHub link (repo, folder, or single file), a local folder, or pasted text.
 4. **Pick test tasks.** Real things you ask Claude to do, each with an optional line on what good looks like. You can pull tasks from your past Claude Code sessions.
 5. **Run.** Each task runs with and without the capability. You see the worst-case cost before starting.
-6. **Results and decision.** Verdict, better/worse/tie counts, whether the capability was actually used, cost, and both answers side by side. Install it into `~/.claude`, or export a zip pack with the results to share.
+6. **Results and decision.** Verdict, better/worse/tie counts, whether the capability was actually used, cost, and both answers side by side. Install or reject it, or export a zip pack with the results to share.
+7. **Dashboard.** What's installed in your Claude now (checked against the files on disk), what's waiting for a decision, every capability's latest result, and every run.
 
 ## Safety
 

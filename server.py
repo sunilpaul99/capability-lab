@@ -816,9 +816,41 @@ def list_runs():
         rid = os.path.basename(os.path.dirname(c))
         cfg = jload(c, {})
         s = jload(os.path.join(os.path.dirname(c), "summary.json"), None)
-        out.append({"id": rid, "candidate": cfg.get("candidate", {}).get("name"), "tasks": len(cfg.get("tasks", [])),
-                    "summary": s, "state": (RUNS.get(rid) or {}).get("state", "done" if s else "stopped")})
+        c0 = cfg.get("candidate", {})
+        live = RUNS.get(rid) or {}
+        out.append({"id": rid, "candidate": c0.get("name"), "candidate_id": c0.get("id"), "tasks": len(cfg.get("tasks", [])),
+                    "reps": cfg.get("cfg", {}).get("reps", 1), "model": cfg.get("cfg", {}).get("model") or "default",
+                    "summary": s, "state": live.get("state", "done" if s else "stopped"),
+                    "progress": [live.get("done"), live.get("total")] if live else None})
     return out
+
+
+def dashboard():
+    cands = list_candidates()
+    runs = list_runs()
+    by_cand = {}
+    for r in runs:  # newest first
+        by_cand.setdefault(r["candidate_id"], []).append(r)
+    for c in cands:
+        rs = by_cand.get(c["id"], [])
+        c["runs"] = len(rs)
+        done = [r for r in rs if r["summary"]]
+        c["latest"] = {"run_id": done[0]["id"], **done[0]["summary"]} if done else None
+        c["running"] = any(r["state"] == "running" for r in rs)
+        if c.get("status") == "installed":
+            c["files_ok"] = all(os.path.exists(p) for p in c.get("installed_paths", [])) if c.get("installed_paths") else True
+    owned = {p for c in cands for p in c.get("installed_paths", [])}
+    outside = []
+    for sk in sorted(glob.glob(os.path.join(CLAUDE_DIR, "skills", "*", "SKILL.md"))):
+        d = os.path.dirname(sk)
+        if d not in owned:
+            outside.append({"type": "skill", "name": os.path.basename(d), "path": sk})
+    for ag in sorted(glob.glob(os.path.join(CLAUDE_DIR, "agents", "*.md"))):
+        if ag not in owned:
+            outside.append({"type": "agent", "name": os.path.basename(ag)[:-3], "path": ag})
+    synced = sorted({os.path.basename(os.path.dirname(p)) for p in glob.glob(os.path.join(CLAUDE_DIR, "skills", "synced", "*", "*", "SKILL.md"))})
+    return {"candidates": cands, "runs": runs, "outside": outside, "synced": synced,
+            "claude_dir": CLAUDE_DIR.replace(HOME, "~")}
 
 
 # ---------- step 6: adopt / share ----------
@@ -943,6 +975,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send(jload(os.path.join(DATA, "tasks.json"), []))
             if path == "/api/tasks/suggest":
                 return self.send(suggest_tasks())
+            if path == "/api/dashboard":
+                return self.send(dashboard())
             if path == "/api/runs":
                 return self.send(list_runs())
             if path.startswith("/api/run/"):

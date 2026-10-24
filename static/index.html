@@ -106,6 +106,7 @@ const STEPS=[
  {k:'tasks',t:'Pick test tasks'},
  {k:'run',t:'Run the comparison'},
  {k:'results',t:'Results and decision'},
+ {k:'dashboard',t:'Dashboard'},
 ];
 const S={step:0,done:{},conn:null,setup:null,cands:[],cand:null,imp:null,tasks:[],runId:null};
 try{S.step=+localStorage.getItem('cl-step')||0;S.cand=localStorage.getItem('cl-cand');S.runId=localStorage.getItem('cl-run')}catch(e){}
@@ -321,7 +322,7 @@ async function drawDecide(cid){
     installed:`<h3>Installed ✓</h3><p>You installed ${esc(c.name)} on ${esc(c.decided)}. Every Claude Code session can now use it.</p>`,
     rejected:`<h3>Rejected</h3><p>You rejected ${esc(c.name)} on ${esc(c.decided)}. Nothing was installed.</p>`,
     uninstalled:`<h3>Uninstalled</h3><p>You installed ${esc(c.name)}, then removed it on ${esc(c.decided)}.</p>`}[st];
-  box.innerHTML=`${head}<div class="row">${decisionButtons(c,true)}<button onclick="pack('${esc(c.id)}')">Make a shareable pack</button><button onclick="go(2)">Try something else</button></div><div id="ad" style="margin-top:10px"></div>`;
+  box.innerHTML=`${head}<div class="row">${decisionButtons(c,true)}<button onclick="pack('${esc(c.id)}')">Make a shareable pack</button><button onclick="go(2)">Try something else</button><button onclick="go(6)">Dashboard →</button></div><div id="ad" style="margin-top:10px"></div>`;
 }
 function openTest(tid,rep){const c=document.getElementById(`test-${tid}-${rep}`);if(!c)return;const d=c.querySelector('details');if(d)d.open=true;
   c.scrollIntoView({behavior:'smooth',block:'start'});c.style.outline='2px solid var(--accent)';setTimeout(()=>c.style.outline='',1600)}
@@ -346,6 +347,56 @@ async function decide(cid,mode){
 }
 async function pack(cid){try{const r=await api('/api/adopt',{candidate_id:cid,mode:'pack',run_id:S.runId});
   $('#ad').innerHTML=`<span class="ok">Pack saved:</span> <span class="mono">${esc(r.path)}</span> <button onclick="api('/api/open',{path:${esc(JSON.stringify(r.path))}})">Show in Finder</button>`}catch(e){$('#ad').innerHTML=`<span class="err">${esc(e.message)}</span>`}}
+// ---- dashboard ----
+V.dashboard=async()=>{
+  const d=await api('/api/dashboard');S.done.dashboard=true;
+  const C=d.candidates,inst=C.filter(c=>c.status=='installed'),pend=C.filter(c=>(c.status||'testing')=='testing'),rej=C.filter(c=>c.status=='rejected'||c.status=='uninstalled');
+  const res=l=>l?`<span class="win">${l.wins} better</span> · <span class="loss">${l.losses} worse</span> · ${l.ties} tie`:'<span class="muted">not tested yet</span>';
+  const short=v=>{const h=(v||'').split(/[:.]/)[0];return{'Adopt':'Worth installing',"Don't adopt":'Better to reject'}[h]||h};
+  const openRun=id=>`S.runId='${id}';save();go(5)`;
+  const testIt=c=>`S.cand='${esc(c.id)}';save();go(4)`;
+  const anyRunning=d.runs.some(r=>r.state=='running');
+  $('#main').innerHTML=`<h2>Dashboard</h2>
+  <p class="lead">What's in your Claude setup now, what's waiting for a decision, and every test you've run.</p>
+  <div class="stats" style="margin-bottom:16px">
+   <div class="stat"><div class="big win">${inst.length}</div><div class="muted">installed by the lab</div></div>
+   <div class="stat"><div class="big" style="color:var(--accent)">${pend.length}</div><div class="muted">waiting for a decision</div></div>
+   <div class="stat"><div class="big loss">${rej.length}</div><div class="muted">rejected or removed</div></div>
+   <div class="stat"><div class="big">${d.runs.length}</div><div class="muted">test runs${anyRunning?' · <span style="color:var(--accent)">one running</span>':''}</div></div>
+  </div>
+
+  <div class="card"><h3>Your Claude setup now</h3>
+   <p class="muted" style="margin-top:0">Checked against the files in <span class="mono">${esc(d.claude_dir)}</span> just now.</p>
+   ${inst.length?inst.map(c=>`<div class="item"><div class="grow"><b>${esc(c.name)}</b> ${statusTag('installed')} ${c.files_ok?'<span class="muted">files present</span>':'<span class="err">files missing</span>'}
+     <div class="muted">Installed ${esc(c.decided)}${c.latest?` · last test: ${res(c.latest)}`:''}</div>
+     ${c.files_ok?'':'<div class="muted">Someone removed these files outside the lab. Click Uninstall to record that, then Test again to reinstall.</div>'}</div>
+     <div class="row" style="flex-wrap:nowrap">${c.latest?`<button onclick="${openRun(c.latest.run_id)}">Results</button>`:''}${decisionButtons(c)}</div></div>`).join('')
+   :'<p>Nothing installed by the lab yet. Your Claude is running on your memory, rules and account skills only.</p>'}
+   ${d.outside.length?`<div style="margin-top:12px"><b>Installed outside the lab</b> <span class="muted">(${d.outside.length})</span><div class="muted">${d.outside.map(o=>`<span class="open" onclick="view(${esc(JSON.stringify(o.path))})">${esc(o.name)}</span> (${o.type})`).join(' · ')}</div></div>`:''}
+   ${d.synced.length?`<div style="margin-top:12px"><b>From your Claude account</b> <span class="muted">(${d.synced.length}, managed in Claude's settings)</span><div class="muted">${d.synced.map(esc).join(' · ')}</div></div>`:''}
+  </div>
+
+  <div class="card"><h3>Needs a decision <span class="muted">(${pend.length})</span></h3>
+   ${pend.length?pend.map(c=>`<div class="item"><div class="grow"><b>${esc(c.name)}</b> ${statusTag('testing')}${c.running?' <span class="tag">test running</span>':''}
+     <div class="muted">${c.latest?`${esc(short(c.latest.verdict))} · ${res(c.latest)}${c.latest.trigger?` · ${esc(c.latest.trigger)}`:''}`:'Not tested yet. Run a test before deciding.'}</div></div>
+     <div class="row" style="flex-wrap:nowrap">${c.latest?`<button onclick="${openRun(c.latest.run_id)}">Results</button>`:`<button class="primary" onclick="${testIt(c)}">Run a test</button>`}${decisionButtons(c,!!c.latest)}</div></div>`).join('')
+   :'<p class="muted">Nothing waiting. <span class="open" onclick="go(2)">Try a new capability</span>.</p>'}
+  </div>
+
+  <div class="card"><h3>All capabilities <span class="muted">(${C.length})</span></h3>
+   ${C.length?`<table class="tests"><thead><tr><th>Capability</th><th>Status</th><th>Latest result</th><th>Runs</th><th style="white-space:nowrap">Avg cost without / with</th></tr></thead><tbody>
+   ${C.map(c=>`<tr onclick="${c.latest?openRun(c.latest.run_id):testIt(c)}"><td><b>${esc(c.name)}</b><div class="muted">${esc(c.skills.concat(c.agents).join(', ')||(c.has_rules?'rules':''))}</div></td>
+     <td>${statusTag(c.status)}<div class="muted">${esc(c.decided||c.created)}</div></td><td>${c.latest?`${esc(short(c.latest.verdict))}<div class="muted">${res(c.latest)}</div>`:'<span class="muted">not tested</span>'}</td>
+     <td>${c.runs}</td><td class="mono" style="white-space:nowrap">${c.latest?`$${c.latest.cost_baseline.toFixed(3)} / $${c.latest.cost_with.toFixed(3)}`:'–'}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">None yet.</p>'}
+  </div>
+
+  <div class="card"><h3>All runs <span class="muted">(${d.runs.length})</span></h3>
+   ${d.runs.length?`<table class="tests"><thead><tr><th>When</th><th>Capability</th><th>Tests</th><th>Model</th><th>Result</th></tr></thead><tbody>
+   ${d.runs.map(r=>`<tr onclick="${openRun(r.id)}"><td style="white-space:nowrap">${esc(r.id.replace(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2}).*/,'$1-$2-$3 $4:$5'))}</td><td>${esc(r.candidate||'')}</td><td>${r.tasks} × ${r.reps}</td><td>${esc(r.model)}</td>
+     <td>${r.summary?`${esc(short(r.summary.verdict))}<div class="muted">${res(r.summary)}${r.summary.errors?` · <span class="err">${r.summary.errors} errors</span>`:''}</div>`:r.state=='running'?`<span style="color:var(--accent)">running${r.progress?` ${r.progress[0]}/${r.progress[1]}`:''}</span>`:'<span class="muted">stopped before finishing</span>'}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">No runs yet.</p>'}
+  </div>`;
+  if(anyRunning)setTimeout(()=>{if(STEPS[S.step].k=='dashboard')render()},5000);
+};
 // ---- file viewer: formatted reading view of any config file ----
 let VF=null,VH=[];
 async function view(path,keep){
