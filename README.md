@@ -16,7 +16,7 @@ Built for the [Bell AI Fellowship](https://bellaifellow.com) Homebrew AI Club.
 ## Start
 
 ```bash
-git clone https://github.com/<owner>/capability-lab.git
+git clone https://github.com/sunilpaul99/capability-lab.git
 ```
 
 Then double-click **Start Capability Lab** in the folder. It opens in your browser at `http://127.0.0.1:8765`.
