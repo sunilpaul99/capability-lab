@@ -24,6 +24,7 @@ HOME = os.path.expanduser("~")
 APP = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get("CAPLAB_DATA") or os.path.join(APP, "data")
 PACKS = os.path.join(APP, "packs")
+PROJECTS = os.environ.get("CAPLAB_PROJECTS") or os.path.join(HOME, ".claude", "projects")  # memory + session history
 CLAUDE_DIR = os.environ.get("CAPLAB_CLAUDE_DIR") or os.path.join(HOME, ".claude")  # where Install puts things
 PORT = int(os.environ.get("PORT", "8765"))
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build"}
@@ -128,7 +129,7 @@ def scan_setup():
     for p in [HOME + "/.claude/CLAUDE.md"]:
         if os.path.isfile(p):
             add("instructions", p)
-    for mdir in sorted(glob.glob(HOME + "/.claude/projects/*/memory")):
+    for mdir in sorted(glob.glob(os.path.join(PROJECTS, "*", "memory"))):
         files = glob.glob(os.path.join(mdir, "*.md"))
         index = os.path.join(mdir, "MEMORY.md")
         order = []
@@ -547,7 +548,7 @@ BELL_STARTERS = [
 
 def suggest_tasks(limit=40):
     rows = []
-    files = sorted(glob.glob(HOME + "/.claude/projects/*/*.jsonl"), key=os.path.getmtime, reverse=True)
+    files = sorted(glob.glob(os.path.join(PROJECTS, "*", "*.jsonl")), key=os.path.getmtime, reverse=True)
     for f in files[:200]:
         try:
             with open(f, errors="replace") as fh:
@@ -927,6 +928,351 @@ def adopt(body):
     raise ValueError("Unknown mode")
 
 
+# ---------- setup check: inventory, evidence, review ----------
+
+CHECKS = os.path.join(DATA, "checks")
+CHECK_LIVE = {}
+CORRECTION_RE = re.compile(r"(^|\b)(no[,.!]|nope|don't|do not|didn't|instead|wrong|not what|stop |never |always |i said|i asked|you forgot|please don't|that's not|not quite|again[,.]|actually[,]? )", re.I)
+
+
+def tok(n_chars):
+    return int(n_chars / 4)
+
+
+def wikilinks(text):
+    text = re.sub(r"```.*?```", "", text, flags=re.S)
+    text = re.sub(r"`[^`\n]*`", "", text)
+    return [m.split("|")[0].split("#")[0].strip() for m in re.findall(r"\[\[([^\]]+)\]\]", text)]
+
+
+def inventory():
+    """Stage 1 (local): what Claude reads, when, and mechanical problems."""
+    roots = jload(os.path.join(DATA, "roots.json"), [])
+    setup = jload(os.path.join(DATA, "setup.json"), {"selected": []})
+    always, on_demand, issues = [], [], []
+
+    def entry(path, kind, note=""):
+        text = read_text(path)
+        return {"path": path, "label": path.replace(HOME, "~"), "kind": kind, "tokens": tok(len(text)),
+                "lines": text.count("\n") + 1, "note": note, "text": text}
+
+    user_md = os.path.join(CLAUDE_DIR, "CLAUDE.md")
+    if os.path.isfile(user_md):
+        always.append(entry(user_md, "instructions", "Read in every Claude Code session, in every folder."))
+    for root in roots:
+        p = os.path.join(root, "CLAUDE.md")
+        if os.path.isfile(p):
+            always.append(entry(p, "instructions", "Read in every session in this folder."))
+        else:
+            issues.append({"kind": "no-claude-md", "severity": "high", "path": root,
+                           "title": "No CLAUDE.md in %s" % os.path.basename(root),
+                           "detail": "Claude starts each session in this folder with no standing instructions. Rules pages here are only read when something points to them."})
+    memory_notes = []
+    for mdir in sorted(glob.glob(os.path.join(PROJECTS, "*", "memory"))):
+        files = sorted(glob.glob(os.path.join(mdir, "*.md")))
+        index = os.path.join(mdir, "MEMORY.md")
+        if not files:
+            continue
+        if os.path.isfile(index):
+            e = entry(index, "memory index", "First 200 lines read at the start of every session in this project.")
+            always.append(e)
+            if e["lines"] > 200:
+                issues.append({"kind": "index-long", "severity": "medium", "path": index, "title": "Memory index is over 200 lines",
+                               "detail": "Claude only reads the first 200 lines, so later entries are invisible."})
+            listed = {os.path.normpath(os.path.join(mdir, h)) for h in re.findall(r"\]\(([^)#\s]+\.md)\)", e["text"])}
+            for h in listed:
+                if not os.path.isfile(h):
+                    issues.append({"kind": "index-missing-file", "severity": "medium", "path": index,
+                                   "title": "Index points to a missing note: %s" % os.path.basename(h),
+                                   "detail": "MEMORY.md lists a note that doesn't exist."})
+        else:
+            listed = set()
+        names = {}
+        for f in files:
+            if f == index:
+                continue
+            e = entry(f, "memory note", "Opened when it looks relevant.")
+            fm = frontmatter(e["text"])
+            e["name"], e["description"] = fm.get("name", ""), fm.get("description", "")
+            names[os.path.basename(f)[:-3]] = f
+            if fm.get("name"):
+                names[fm["name"]] = f
+            on_demand.append(e)
+            memory_notes.append(e)
+            if os.path.isfile(index) and f not in listed:
+                issues.append({"kind": "not-in-index", "severity": "medium", "path": f, "title": "Memory note not in the index: %s" % os.path.basename(f),
+                               "detail": "Claude finds notes through MEMORY.md; this one may never be read."})
+        for e in memory_notes:
+            for link in wikilinks(e["text"]):
+                if link not in names and not any(os.path.isfile(os.path.join(r, "pages", link + ".md")) or os.path.isfile(os.path.join(r, link + ".md")) for r in roots):
+                    issues.append({"kind": "broken-link", "severity": "low", "path": e["path"],
+                                   "title": "Broken link [[%s]] in %s" % (link, os.path.basename(e["path"])),
+                                   "detail": "It points to a note that was never written."})
+        # near-duplicate notes by description
+        for i in range(len(memory_notes)):
+            for j in range(i + 1, len(memory_notes)):
+                a = set(re.findall(r"\w{4,}", memory_notes[i]["description"].lower()))
+                b = set(re.findall(r"\w{4,}", memory_notes[j]["description"].lower()))
+                if a and b and len(a & b) / len(a | b) > 0.5:
+                    issues.append({"kind": "duplicate", "severity": "low", "path": memory_notes[j]["path"],
+                                   "title": "Possible duplicate notes: %s and %s" % (os.path.basename(memory_notes[i]["path"]), os.path.basename(memory_notes[j]["path"])),
+                                   "detail": "Their descriptions overlap heavily."})
+    reach_text = " ".join(e["text"] for e in always + memory_notes)
+    seen = {e["path"] for e in always + on_demand}
+    chosen = list(dict.fromkeys(setup.get("selected", []) + [f["path"] for f in scan_setup() if f["kind"] in ("rules page", "added by you", "instructions")]))
+    for p in chosen:
+        if p in seen or not os.path.isfile(p):
+            continue
+        e = entry(p, "rules page", "Read only when a task or another file points to it.")
+        stem = os.path.basename(p)[:-3]
+        refs = [os.path.basename(x["path"]) for x in always + memory_notes if stem in x["text"]]
+        e["note"] = ("Pointed to by: %s." % ", ".join(refs)) if refs else "Nothing points to it; read only when named."
+        on_demand.append(e)
+        if not refs:
+            issues.append({"kind": "unreachable", "severity": "high", "path": p,
+                           "title": "%s is never pointed to" % os.path.basename(p),
+                           "detail": "No CLAUDE.md or memory note mentions it, so Claude only reads it when you ask by name."})
+    for e in always:
+        if e["kind"] == "instructions" and e["tokens"] > 6000:
+            issues.append({"kind": "long-instructions", "severity": "medium", "path": e["path"],
+                           "title": "%s is long (about %d tokens)" % (os.path.basename(e["path"]), e["tokens"]),
+                           "detail": "It's read every session. Long standing instructions dilute attention; move detail into pages it links to."})
+    skills = [{"name": os.path.basename(os.path.dirname(s)), "path": s, "description": frontmatter(read_text(s, 4000)).get("description", "")}
+              for s in sorted(glob.glob(os.path.join(CLAUDE_DIR, "skills", "*", "SKILL.md")))]
+    agents = [{"name": os.path.basename(a)[:-3], "path": a, "description": frontmatter(read_text(a, 4000)).get("description", "")}
+              for a in sorted(glob.glob(os.path.join(CLAUDE_DIR, "agents", "*.md")))]
+    synced = sorted({os.path.basename(os.path.dirname(p)) for p in glob.glob(os.path.join(CLAUDE_DIR, "skills", "synced", "*", "*", "SKILL.md"))})
+    for e in always + on_demand:
+        e.pop("text", None)
+    return {"always": always, "on_demand": on_demand, "skills": skills, "agents": agents, "synced": synced, "issues": issues,
+            "always_tokens": sum(e["tokens"] for e in always)}
+
+
+def evidence(days=120, max_files=300):
+    """Stage 2 (local): what you ask for, where you corrected Claude, which skills fired."""
+    cutoff = time.time() - days * 86400
+    files = [f for f in glob.glob(os.path.join(PROJECTS, "*", "*.jsonl")) if os.path.getmtime(f) >= cutoff]
+    files = sorted(files, key=os.path.getmtime, reverse=True)[:max_files]
+    firsts, corrections, skills_fired, n_prompts, dates = [], [], {}, 0, []
+    for f in files:
+        first = None
+        try:
+            with open(f, errors="replace") as fh:
+                for line in fh:
+                    if '"type":"user"' in line:
+                        d = json.loads(line)
+                        c = d.get("message", {}).get("content")
+                        if isinstance(c, list):
+                            if any(isinstance(x, dict) and x.get("type") == "tool_result" for x in c):
+                                continue
+                            c = " ".join(x.get("text", "") for x in c if isinstance(x, dict) and x.get("type") == "text")
+                        if not isinstance(c, str):
+                            continue
+                        c = c.strip()
+                        if not c or c.startswith("<") or len(c) < 4:
+                            continue
+                        n_prompts += 1
+                        if first is None:
+                            first = c
+                            dates.append(d.get("timestamp", "")[:10])
+                        elif CORRECTION_RE.search(c[:400]):
+                            corrections.append({"text": c[:260], "date": d.get("timestamp", "")[:10]})
+                    elif '"name":"Skill"' in line:
+                        d = json.loads(line)
+                        for x in d.get("message", {}).get("content", []) or []:
+                            if isinstance(x, dict) and x.get("type") == "tool_use" and x.get("name") == "Skill":
+                                k = str((x.get("input") or {}).get("skill", "?"))
+                                skills_fired[k] = skills_fired.get(k, 0) + 1
+        except Exception:
+            continue
+        if first:
+            firsts.append({"text": first[:300], "date": dates[-1] if dates else ""})
+    ds = sorted(x for x in dates if x)
+    return {"sessions": len(firsts), "prompts": n_prompts, "from": ds[0] if ds else "", "to": ds[-1] if ds else "",
+            "session_openers": firsts[:80], "corrections": corrections[:40], "skills_fired": skills_fired}
+
+
+REVIEW_PROMPT = """SETUP CHECK. You are reviewing one person's Claude configuration to tell them, plainly, what it does today and the few changes most likely to help.
+Ground every claim in the evidence below: name the file, or quote the person's own words from their sessions. If the evidence is thin, say so rather than guessing.
+Write for a smart non-programmer. Plain words, short sentences, no hype.
+
+## Configuration inventory
+{inventory}
+
+## Mechanical issues already found (do not repeat these as opportunities unless one is the biggest problem)
+{issues}
+
+## Evidence from their Claude Code sessions ({sessions} sessions, {prompts} prompts, {span})
+Session openers (what they asked for):
+{openers}
+
+Messages that look like corrections:
+{corrections}
+
+Skills that fired: {skills_fired}
+
+## Capabilities available to test (catalog ids)
+{catalog}
+
+Reply with ONLY a JSON object:
+{{
+ "summary": "3-4 sentences: what this setup does for them today, and the overall picture",
+ "pieces": [{{"name": "file or group", "what_it_does": "one sentence", "assessment": "one sentence: working well / weak spot"}}],
+ "opportunities": [
+   {{"title": "short imperative", "why": "1-2 sentences tied to the evidence", "evidence": ["file name or short quote", "..."],
+     "impact": "high|medium|low", "effort": "low|medium|high",
+     "action": one of
+       {{"type": "test_catalog", "id": "<catalog id>"}}
+       {{"type": "draft_skill", "name": "kebab-case", "description": "when Claude should use it", "instructions": "the skill body, markdown"}}
+       {{"type": "save_memory", "name": "kebab-case", "description": "one line", "body": "the note, with **Why:** and **How to apply:** lines"}}
+       {{"type": "edit_file", "path": "<exact path from the inventory>", "suggestion": "what to change"}}
+       {{"type": "create_claude_md", "folder": "<exact folder path from the issues>", "body": "a short CLAUDE.md, under 40 lines, that points to their rules pages by file name"}}
+       {{"type": "ask_claude", "prompt": "what to ask Claude to do"}}
+   }}
+ ]
+}}
+Give 3 to 7 opportunities, best first. Prefer small changes with clear payoff. Use test_catalog only when a catalog item fits the evidence."""
+
+
+def review(inv, ev, model):
+    cli = find_cli()
+    cat = "\n".join("- %s: %s" % (c["id"], c["what"]) for c in CATALOG)
+
+    def lines(xs, f):
+        return "\n".join(f(x) for x in xs) or "(none)"
+    inv_txt = "Always read at session start (about %d tokens):\n%s\n\nRead when relevant:\n%s\n\nInstalled skills: %s\nInstalled agents: %s\nSkills from their Claude account: %s" % (
+        inv["always_tokens"],
+        lines(inv["always"], lambda e: "- %s (%s, ~%d tokens): %s" % (e["label"], e["kind"], e["tokens"], e["note"])),
+        lines(inv["on_demand"], lambda e: "- %s (%s): %s" % (e["label"], e["kind"], (e.get("description") + " " if e.get("description") else "") + e["note"])),
+        ", ".join(s["name"] for s in inv["skills"]) or "none", ", ".join(a["name"] for a in inv["agents"]) or "none",
+        ", ".join(inv["synced"]) or "none")
+    # include the always-read files' text, which is what Claude actually sees every session
+    for e in inv["always"]:
+        inv_txt += "\n\n--- %s ---\n%s" % (e["label"], read_text(e["path"], 6000))
+    prompt = REVIEW_PROMPT.format(
+        inventory=inv_txt, issues=lines(inv["issues"], lambda i: "- [%s] %s: %s (%s)" % (i["severity"], i["title"], i["detail"], i["path"].replace(HOME, "~"))),
+        sessions=ev["sessions"], prompts=ev["prompts"], span=("%s to %s" % (ev["from"], ev["to"])) if ev["from"] else "no dates",
+        openers=lines(ev["session_openers"][:60], lambda x: "- (%s) %s" % (x["date"], x["text"].replace("\n", " "))),
+        corrections=lines(ev["corrections"], lambda x: "- (%s) %s" % (x["date"], x["text"].replace("\n", " "))),
+        skills_fired=", ".join("%s ×%d" % kv for kv in ev["skills_fired"].items()) or "none recorded", catalog=cat)
+    cmd = [cli, "-p", "--output-format", "json", "--no-session-persistence", "--tools", "", "--max-budget-usd", "1.5"]
+    if model:
+        cmd += ["--model", model]
+    p = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=600, cwd=DATA)
+    out = json.loads(p.stdout)
+    if out.get("is_error"):
+        raise ValueError(out.get("result") or "Claude returned an error")
+    m = re.search(r"\{.*\}", out.get("result", ""), re.S)
+    rep = json.loads(m.group(0))
+    # keep actions honest: only known catalog ids and files that exist
+    known = {c["id"] for c in CATALOG}
+    paths = {e["path"] for e in inv["always"] + inv["on_demand"]}
+    for o in rep.get("opportunities", []):
+        a = o.get("action") or {}
+        if a.get("type") == "test_catalog" and a.get("id") not in known:
+            o["action"] = {"type": "ask_claude", "prompt": o.get("title", "")}
+        if a.get("type") == "edit_file":
+            hit = next((x for x in paths if x == a.get("path") or x.replace(HOME, "~") == a.get("path") or os.path.basename(x) == os.path.basename(a.get("path", ""))), None)
+            if hit:
+                a["path"] = hit
+            else:
+                o["action"] = {"type": "ask_claude", "prompt": a.get("suggestion") or o.get("title", "")}
+        if a.get("type") == "create_claude_md":
+            folder = under_home(a.get("folder", ""))
+            roots = [os.path.realpath(r) for r in jload(os.path.join(DATA, "roots.json"), [])]
+            a["folder"] = folder if folder in roots else (roots[0] if roots else "")
+        o["state"] = "open"
+    return rep, out.get("total_cost_usd") or 0
+
+
+def start_check(body):
+    if any(v.get("state") == "running" for v in CHECK_LIVE.values()):
+        raise ValueError("A check is already running.")
+    if not connect_status().get("logged_in"):
+        raise ValueError("Step 1 first: Claude is not signed in.")
+    cid = time.strftime("%Y%m%d-%H%M%S")
+    CHECK_LIVE[cid] = {"id": cid, "state": "running", "stage": "Taking inventory"}
+    threading.Thread(target=_check_thread, args=(cid, body.get("model") or "sonnet"), daemon=True).start()
+    return CHECK_LIVE[cid]
+
+
+def _check_thread(cid, model):
+    live = CHECK_LIVE[cid]
+    d = os.path.join(CHECKS, cid)
+    try:
+        inv = inventory()
+        live["stage"] = "Reading your past sessions"
+        ev = evidence()
+        live["stage"] = "Claude is reviewing (about a minute)"
+        rep, cost = review(inv, ev, model)
+        jsave(os.path.join(d, "check.json"), {"id": cid, "inventory": inv, "evidence": {k: v for k, v in ev.items() if k != "session_openers"},
+                                              "evidence_sample": ev["session_openers"][:10], "report": rep, "cost": cost, "model": model})
+        live["state"] = "done"
+    except Exception as e:
+        live["state"], live["error"] = "error", str(e)[:400]
+
+
+def latest_check():
+    files = sorted(glob.glob(os.path.join(CHECKS, "*", "check.json")), reverse=True)
+    cur = jload(files[0], None) if files else None
+    prev = jload(files[1], None) if len(files) > 1 else None
+    live = next((v for v in sorted(CHECK_LIVE.values(), key=lambda v: v["id"], reverse=True)), None)
+    if cur and prev:
+        cur["previous"] = {"id": prev["id"], "issues": len(prev["inventory"]["issues"]),
+                           "always_tokens": prev["inventory"]["always_tokens"],
+                           "done": sum(1 for o in prev["report"].get("opportunities", []) if o.get("state") == "done")}
+    return {"check": cur, "live": live}
+
+
+def mark_opportunity(body):
+    p = os.path.join(CHECKS, body["check_id"], "check.json")
+    c = jload(p, None)
+    if not c:
+        raise ValueError("Check not found")
+    c["report"]["opportunities"][int(body["index"])]["state"] = body.get("state", "done")
+    jsave(p, c)
+    return {"ok": True}
+
+
+def act_draft_skill(body):
+    meta = do_import({"kind": "text", "text_type": "skill", "name": body.get("name"), "description": body.get("description"),
+                      "value": body.get("instructions", "")})
+    cand = build_candidate({"import_id": meta["id"], "selected": [i["id"] for i in meta["items"]], "name": body.get("name")})
+    return {"candidate": cand}
+
+
+def act_save_memory(body):
+    mdirs = sorted(glob.glob(os.path.join(PROJECTS, "*", "memory")),
+                   key=lambda d: len(glob.glob(os.path.join(d, "*.md"))), reverse=True)
+    mdir = body.get("dir") or (mdirs[0] if mdirs else None)
+    if not mdir or not os.path.isdir(mdir):
+        raise ValueError("No memory folder found.")
+    name = slug(body.get("name") or "note")
+    path = os.path.join(mdir, name + ".md")
+    if os.path.exists(path):
+        raise ValueError("A memory note named %s already exists." % name)
+    desc = (body.get("description") or "").replace("\n", " ").strip()
+    with open(path, "w") as f:
+        f.write("---\nname: %s\ndescription: %s\nmetadata:\n  type: feedback\n  source: capability-lab setup check\n---\n\n%s\n" % (name, desc, body.get("body", "").strip()))
+    index = os.path.join(mdir, "MEMORY.md")
+    title = body.get("title") or name.replace("-", " ").capitalize()
+    with open(index, "a") as f:
+        f.write(("" if read_text(index).endswith("\n") or not os.path.exists(index) else "\n") + "- [%s](%s.md) — %s\n" % (title, name, desc))
+    return {"ok": True, "path": path, "index": index}
+
+
+def act_create_claude_md(body):
+    folder = under_home(body.get("folder", ""))
+    if not folder or folder not in [os.path.realpath(r) for r in jload(os.path.join(DATA, "roots.json"), [])]:
+        raise ValueError("That folder isn't one of the lab's project folders.")
+    path = os.path.join(folder, "CLAUDE.md")
+    if os.path.exists(path):
+        raise ValueError("CLAUDE.md already exists there. Open it and edit instead.")
+    with open(path, "w") as f:
+        f.write(body.get("body", "").strip() + "\n")
+    return {"ok": True, "path": path}
+
+
 # ---------- HTTP ----------
 
 class H(BaseHTTPRequestHandler):
@@ -975,6 +1321,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send(jload(os.path.join(DATA, "tasks.json"), []))
             if path == "/api/tasks/suggest":
                 return self.send(suggest_tasks())
+            if path == "/api/check":
+                return self.send(latest_check())
             if path == "/api/dashboard":
                 return self.send(dashboard())
             if path == "/api/runs":
@@ -1004,6 +1352,16 @@ class H(BaseHTTPRequestHandler):
                 return self.send({"ok": True})
             if path == "/api/import":
                 return self.send(do_import(b))
+            if path == "/api/check":
+                return self.send(start_check(b))
+            if path == "/api/check/mark":
+                return self.send(mark_opportunity(b))
+            if path == "/api/act/draft_skill":
+                return self.send(act_draft_skill(b))
+            if path == "/api/act/save_memory":
+                return self.send(act_save_memory(b))
+            if path == "/api/act/create_claude_md":
+                return self.send(act_create_claude_md(b))
             if path == "/api/quick":
                 return self.send(quick_add(b))
             if path == "/api/candidate":

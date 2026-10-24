@@ -31,7 +31,7 @@ Or from Terminal: `python3 server.py`
 4. **Pick test tasks.** Real things you ask Claude to do, each with an optional line on what good looks like. You can pull tasks from your past Claude Code sessions.
 5. **Run.** Each task runs with and without the capability. You see the worst-case cost before starting.
 6. **Results and decision.** Verdict, better/worse/tie counts, whether the capability was actually used, cost, and both answers side by side. Install or reject it, or export a zip pack with the results to share.
-7. **Dashboard.** What's installed in your Claude now (checked against the files on disk), what's waiting for a decision, every capability's latest result, and every run.
+7. **Dashboard.** Starts with **Check my setup**: one button that inventories what Claude reads and when, finds mechanical problems (no CLAUDE.md, broken links, pages nothing points to), reads your past Claude Code sessions for what you ask for and where you correct Claude, then asks Claude (one Sonnet call, usually under 40 cents) for a plain assessment and the best few improvements. Each suggestion has a button: test a catalog capability, draft a skill for testing, save a memory note, create a CLAUDE.md, open a file, or copy a prompt. Below that: what's installed in your Claude now (checked against the files on disk), what's waiting for a decision, every capability's latest result, and every run.
 
 ## Safety
 

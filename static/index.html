@@ -358,6 +358,7 @@ V.dashboard=async()=>{
   const anyRunning=d.runs.some(r=>r.state=='running');
   $('#main').innerHTML=`<h2>Dashboard</h2>
   <p class="lead">What's in your Claude setup now, what's waiting for a decision, and every test you've run.</p>
+  <div class="card" id="checkcard"><p class="muted">Loading setup check…</p></div>
   <div class="stats" style="margin-bottom:16px">
    <div class="stat"><div class="big win">${inst.length}</div><div class="muted">installed by the lab</div></div>
    <div class="stat"><div class="big" style="color:var(--accent)">${pend.length}</div><div class="muted">waiting for a decision</div></div>
@@ -395,8 +396,69 @@ V.dashboard=async()=>{
    ${d.runs.map(r=>`<tr onclick="${openRun(r.id)}"><td style="white-space:nowrap">${esc(r.id.replace(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2}).*/,'$1-$2-$3 $4:$5'))}</td><td>${esc(r.candidate||'')}</td><td>${r.tasks} × ${r.reps}</td><td>${esc(r.model)}</td>
      <td>${r.summary?`${esc(short(r.summary.verdict))}<div class="muted">${res(r.summary)}${r.summary.errors?` · <span class="err">${r.summary.errors} errors</span>`:''}</div>`:r.state=='running'?`<span style="color:var(--accent)">running${r.progress?` ${r.progress[0]}/${r.progress[1]}`:''}</span>`:'<span class="muted">stopped before finishing</span>'}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">No runs yet.</p>'}
   </div>`;
+  drawCheck();
   if(anyRunning)setTimeout(()=>{if(STEPS[S.step].k=='dashboard')render()},5000);
 };
+// ---- setup check ----
+let CHK=null;
+async function drawCheck(){
+  const box=$('#checkcard');if(!box)return;
+  const r=await api('/api/check');CHK=r.check;const live=r.live;
+  if(live&&live.state=='running'){box.innerHTML=`<h3>Setup check</h3><p><b>${esc(live.stage)}…</b></p><div class="bar"><div style="width:${live.stage.startsWith('Taking')?15:live.stage.startsWith('Reading')?35:70}%"></div></div>`;
+    setTimeout(()=>{if(STEPS[S.step].k=='dashboard')drawCheck()},3000);return}
+  const btn=`<button class="primary" onclick="runCheck(this)">${CHK?'Check again':'Check my setup'}</button>`;
+  const err=live&&live.state=='error'?`<p class="err">The last check failed: ${esc(live.error)}</p>`:'';
+  if(!CHK){box.innerHTML=`<h3>Setup check</h3><p>One button: the lab reads your memory, instructions and rules pages, looks at what you've asked Claude for in past sessions, and asks Claude for a plain assessment and the few changes most likely to help. Each suggestion comes with a button to act on it.</p>
+    <p class="muted">The reading happens on this Mac. Then one Sonnet review, usually 10 to 40 cents. Nothing changes until you choose to act.</p>${err}${btn}`;return}
+  const rep=CHK.report,inv=CHK.inventory,ev=CHK.evidence,prev=CHK.previous;
+  const ops=rep.opportunities||[];const open=ops.filter(o=>o.state=='open').length;
+  const when=CHK.id.replace(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2}).*/,'$1-$2-$3 $4:$5');
+  const tagI=v=>`<span class="tag ${v=='high'?'st-good':v=='low'?'':'warn'}">${esc(v)} impact</span>`;
+  box.innerHTML=`<div class="row"><h3 class="grow" style="margin:0">Setup check <span class="muted" style="font-weight:400">· ${when}</span></h3>${btn}</div>${err}
+   <p>${esc(rep.summary||'')}</p>
+   <p class="muted">Claude reads about ${inv.always_tokens.toLocaleString()} tokens of your instructions at the start of every session · ${inv.on_demand.length} files read when relevant · ${ev.sessions} past sessions reviewed · ${inv.issues.length} mechanical issue${inv.issues.length==1?'':'s'}${prev?` (was ${prev.issues} on ${prev.id.slice(0,4)}-${prev.id.slice(4,6)}-${prev.id.slice(6,8)})`:''}</p>
+   <h3 style="margin-top:18px">Best opportunities <span class="muted">(${open} open of ${ops.length})</span></h3>
+   ${ops.map((o,i)=>`<div class="item" style="${o.state!='open'?'opacity:.55':''}"><div class="grow">
+      <b>${i+1}. ${esc(o.title)}</b> ${tagI(o.impact)} <span class="tag">${esc(o.effort)} effort</span>${o.state=='done'?' <span class="tag st-good">done ✓</span>':o.state=='dismissed'?' <span class="tag">dismissed</span>':''}
+      <div>${esc(o.why)}</div>${(o.evidence||[]).length?`<div class="muted">Evidence: ${o.evidence.map(e=>'“'+esc(e)+'”').join(' · ')}</div>`:''}
+      <div id="op-${i}"></div></div>
+      <div class="row" style="flex-wrap:nowrap;align-items:flex-start">${o.state=='open'?actionButton(o,i)+`<button onclick="markOp(${i},'done')">Done</button><button onclick="markOp(${i},'dismissed')">Dismiss</button>`:`<button onclick="markOp(${i},'open')">Reopen</button>`}</div></div>`).join('')}
+   <details style="margin-top:14px"><summary class="muted">What your setup does, piece by piece</summary>
+     <table class="tests"><tbody>${(rep.pieces||[]).map(p=>`<tr style="cursor:default"><td><b>${esc(p.name)}</b></td><td>${esc(p.what_it_does)}</td><td class="muted">${esc(p.assessment)}</td></tr>`).join('')}</tbody></table></details>
+   <details><summary class="muted">Mechanical issues (${inv.issues.length})</summary>
+     ${inv.issues.map(x=>`<div class="item"><div class="grow"><span class="tag ${x.severity=='high'?'bad':x.severity=='medium'?'warn':''}">${esc(x.severity)}</span> <b>${esc(x.title)}</b><div class="muted">${esc(x.detail)}</div></div>${/\.md$/.test(x.path)?`<button onclick="view(${esc(JSON.stringify(x.path))})">Open</button>`:''}</div>`).join('')||'<p class="muted">None.</p>'}</details>
+   <details><summary class="muted">What Claude reads, and when</summary>
+     <p><b>Every session:</b> ${inv.always.map(e=>`<span class="open" onclick="view(${esc(JSON.stringify(e.path))})">${esc(e.label.split('/').pop())}</span> (~${e.tokens} tokens)`).join(' · ')||'nothing'}</p>
+     <p><b>When relevant:</b> ${inv.on_demand.map(e=>`<span class="open" onclick="view(${esc(JSON.stringify(e.path))})">${esc(e.label.split('/').pop())}</span>`).join(' · ')}</p>
+     <p class="muted">Skills from your Claude account: ${esc(inv.synced.join(', ')||'none')}</p></details>`;
+}
+function actionButton(o,i){const a=o.action||{};
+  const L={test_catalog:'Test it',draft_skill:'Draft the skill',save_memory:'Review and save',edit_file:'Open file',create_claude_md:'Review and create',ask_claude:'Copy prompt'}[a.type];
+  return L?`<button class="primary" onclick="doAction(${i},this)">${L}</button>`:''}
+async function runCheck(b){b.disabled=true;try{await api('/api/check',{});drawCheck()}catch(e){alert(e.message);b.disabled=false}}
+async function markOp(i,state){await api('/api/check/mark',{check_id:CHK.id,index:i,state});drawCheck()}
+async function doAction(i,btn){
+  const o=CHK.report.opportunities[i],a=o.action,slot=$('#op-'+i);
+  const done=async(html)=>{await api('/api/check/mark',{check_id:CHK.id,index:i,state:'done'});await drawCheck();const s2=$('#op-'+i);if(s2)s2.innerHTML=`<div class="ok" style="margin-top:6px">${html}</div>`};
+  try{
+  if(a.type=='test_catalog'){btn.disabled=true;btn.textContent='Adding…';const r=await api('/api/quick',{id:a.id});S.cand=r.candidate.id;save();
+    await done(`Now testing ${esc(r.candidate.name)}; ${r.tasks_added} test tasks added. <span class="open" onclick="go(4)">Run the comparison →</span>`)}
+  else if(a.type=='ask_claude'){await navigator.clipboard.writeText(a.prompt);btn.textContent='Copied';slot.innerHTML=`<pre>${esc(a.prompt)}</pre><div class="muted">Paste this into a Claude session, then click Done.</div>`}
+  else if(a.type=='edit_file'){slot.innerHTML=`<div class="muted" style="margin-top:6px">Suggested change: ${esc(a.suggestion)}</div>`;view(a.path)}
+  else if(a.type=='draft_skill'){slot.innerHTML=`<div style="margin-top:8px"><label>Name</label><input type="text" id="ds-n" value="${esc(a.name)}"><label>When Claude should use it</label><input type="text" id="ds-d" value="${esc(a.description)}">
+      <label>Instructions</label><textarea id="ds-i" style="min-height:160px">${esc(a.instructions)}</textarea><div class="row" style="margin-top:8px"><button class="primary" id="ds-go">Add for testing</button><span class="muted">It enters Testing like any other capability. Nothing is installed.</span></div></div>`;
+    $('#ds-go').onclick=async()=>{const r=await api('/api/act/draft_skill',{name:$('#ds-n').value,description:$('#ds-d').value,instructions:$('#ds-i').value});S.cand=r.candidate.id;save();
+      await done(`Now testing ${esc(r.candidate.name)}. Add test tasks in <span class="open" onclick="go(3)">step 4</span>, then run it.`)}}
+  else if(a.type=='save_memory'){slot.innerHTML=`<div style="margin-top:8px"><label>Name</label><input type="text" id="sm-n" value="${esc(a.name)}"><label>One-line description (goes in MEMORY.md)</label><input type="text" id="sm-d" value="${esc(a.description)}">
+      <label>Note</label><textarea id="sm-b" style="min-height:120px">${esc(a.body)}</textarea><div class="row" style="margin-top:8px"><button class="primary" id="sm-go">Save to memory</button><span class="muted">Adds a note and a line in MEMORY.md. Claude reads it from the next session.</span></div></div>`;
+    $('#sm-go').onclick=async()=>{try{const r=await api('/api/act/save_memory',{name:$('#sm-n').value,description:$('#sm-d').value,body:$('#sm-b').value});
+      await done(`Saved. <span class="open" onclick="view(${esc(JSON.stringify(r.path))})">Open the note</span> · <span class="open" onclick="view(${esc(JSON.stringify(r.index))})">Open MEMORY.md</span>`)}catch(e){alert(e.message)}}}
+  else if(a.type=='create_claude_md'){slot.innerHTML=`<div style="margin-top:8px"><div class="muted">Creates <span class="mono">${esc((a.folder||'').replace(/^\/Users\/[^/]+/,'~'))}/CLAUDE.md</span>, read at the start of every session in that folder. Edit it first if you like.</div>
+      <textarea id="cm-b" class="mono" style="min-height:200px;margin-top:6px">${esc(a.body)}</textarea><div class="row" style="margin-top:8px"><button class="primary" id="cm-go">Create CLAUDE.md</button></div></div>`;
+    $('#cm-go').onclick=async()=>{try{const r=await api('/api/act/create_claude_md',{folder:a.folder,body:$('#cm-b').value});
+      await done(`Created. <span class="open" onclick="view(${esc(JSON.stringify(r.path))})">Open CLAUDE.md</span>`)}catch(e){alert(e.message)}}}
+  }catch(e){alert(e.message);btn.disabled=false}
+}
 // ---- file viewer: formatted reading view of any config file ----
 let VF=null,VH=[];
 async function view(path,keep){

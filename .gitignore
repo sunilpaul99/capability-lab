@@ -1,3 +1,4 @@
 data/
 packs/
 __pycache__/
+tests/tmp/
