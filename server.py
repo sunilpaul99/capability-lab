@@ -239,7 +239,7 @@ def do_import(body):
     kind, value = body.get("kind"), (body.get("value") or "").strip()
     if kind == "git":
         if not re.match(r"^https://[\w.-]+/[\w./-]+$", value):
-            raise ValueError("Use an https:// git URL, e.g. https://github.com/owner/repo")
+            raise ValueError("That doesn't look like a GitHub link. It should start with https://github.com/")
         url = value
         sub = ""
         m = re.match(r"^(https://github\.com/[^/]+/[^/]+)/tree/[^/]+/(.+)$", value)

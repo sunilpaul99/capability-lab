@@ -182,8 +182,9 @@ V.add=async()=>{
   $('#main').innerHTML=`<h2>3. Add a new capability</h2>
   <p class="lead">Bring in a skill, agent, or set of rules you want to try. Point at a GitHub repo, a folder, or paste the text. The lab finds the usable pieces; nothing runs yet.</p>
   <div class="card"><div class="tabs">${[['git','From GitHub'],['folder','From a folder'],['text','Paste text']].map(([k,t])=>`<button class="${mode==k?'on':''}" onclick="S.addMode='${k}';render()">${t}</button>`).join('')}</div>
-  ${mode=='git'?`<label>Repository or folder link</label><input type="text" id="val" placeholder="https://github.com/anthropics/skills/tree/main/skills/brand-guidelines">`:''}
-  ${mode=='folder'?`<label>Folder path</label><input type="text" id="val" placeholder="~/Downloads/some-skill">`:''}
+  ${mode=='git'?`<label>Repository or folder link</label><input type="text" id="val" placeholder="e.g. https://github.com/anthropics/skills/tree/main/skills/brand-guidelines">
+     <div class="muted" style="margin-top:6px">Paste a link to a GitHub repo or to one folder inside it. <span class="open" onclick="$('#val').value='https://github.com/anthropics/skills/tree/main/skills/internal-comms';$('#ist').textContent=''">Use this example</span> (Anthropic's internal-comms skill, good for Bell AI emails).</div>`:''}
+  ${mode=='folder'?`<label>Folder path</label><input type="text" id="val" placeholder="e.g. ~/Downloads/some-skill">`:''}
   ${mode=='text'?`<div class="row"><div class="grow"><label>Name</label><input type="text" id="tname" placeholder="plain-voice-editor"></div><div><label>Type</label><select id="ttype"><option value="skill">Skill</option><option value="agent">Agent</option><option value="rule">Rules (always on)</option></select></div></div>
      <label>When should Claude use it? (one line, skills and agents)</label><input type="text" id="tdesc" placeholder="Use when editing prose the user will publish">
      <label>Instructions</label><textarea id="val" style="min-height:160px" placeholder="Paste the SKILL.md, agent definition, or rules here"></textarea>`:''}
@@ -194,7 +195,8 @@ V.add=async()=>{
   if(S.imp)showFound(S.imp);
 };
 async function doImport(kind){
-  const b={kind,value:$('#val').value};
+  const b={kind,value:$('#val').value.trim()};
+  if(!b.value){$('#ist').innerHTML=`<span class="err">${kind=='git'?'Paste a GitHub link first. The grey text is only an example.':kind=='folder'?'Type a folder path first.':'Paste the instructions first.'}</span>`;return}
   if(kind=='text'){b.name=$('#tname').value;b.text_type=$('#ttype').value;b.description=$('#tdesc').value}
   $('#scanb').disabled=true;$('#ist').textContent=kind=='git'?'Downloading and scanning…':'Scanning…';
   try{S.imp=await api('/api/import',b);showFound(S.imp);$('#ist').textContent=''}catch(e){$('#ist').innerHTML=`<span class="err">${esc(e.message)}</span>`}
