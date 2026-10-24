@@ -60,6 +60,14 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px s
 .bar>div{height:100%;background:var(--accent);transition:width .4s}
 .win{color:var(--good)} .loss{color:var(--bad)}
 details summary{cursor:pointer}
+.open{color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.open:hover{text-decoration-color:var(--accent)}
+#viewer{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;z-index:10;padding:4vh 16px}
+#viewer.on{display:flex;justify-content:center}
+#viewer .box{height:92vh;background:var(--panel);border:1px solid var(--line);border-radius:14px;width:min(860px,100%);display:flex;flex-direction:column;overflow:hidden}
+#viewer .hd{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+#viewer iframe{flex:1;border:0;width:100%;background:var(--panel)}
+#viewer pre{flex:1;margin:0;border:0;border-radius:0;max-height:none}
 @media (max-width:760px){.wrap{grid-template-columns:1fr}nav{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}
   main{padding:20px 16px}.cols,.stats{grid-template-columns:1fr 1fr}}
 @media (max-width:480px){.cols,.stats{grid-template-columns:1fr}}
@@ -74,6 +82,8 @@ details summary{cursor:pointer}
 </nav>
 <main id="main"></main>
 </div>
+<div id="viewer" onclick="if(event.target===this)closeView()"><div class="box"><div class="hd"><div class="grow"><b id="vt"></b><div class="muted mono" id="vp"></div></div><button id="vsrc" onclick="toggleSrc()">Show source</button><button onclick="closeView()">Close</button></div><div id="vb" style="flex:1;display:flex;min-height:0"></div></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script>
 const STEPS=[
  {k:'connect',t:'Connect'},
@@ -121,7 +131,7 @@ V.setup=async()=>{
   $('#main').innerHTML=`<h2>2. Your current setup</h2>
   <p class="lead">This is the "before" in the comparison. Tick everything that shapes how Claude works for you today: memory, standing rules, voice guides. Every test runs with these, and the "after" adds the new capability on top.</p>
   ${Object.keys(groups).map(g=>`<div class="card"><h3>${esc(g[0].toUpperCase()+g.slice(1))} <span class="muted">(${groups[g].length})</span></h3>
-   ${groups[g].map(f=>`<label class="item" style="margin:0;color:var(--ink)"><input type="checkbox" class="sp" value="${esc(f.path)}" ${sel.has(f.path)?'checked':''}><div class="grow"><div>${esc(f.label.split('/').pop())}</div><div class="muted mono">${esc(f.label)} · ${Math.round(f.size/1000)} KB</div></div></label>`).join('')}</div>`).join('')||'<div class="card muted">Nothing found yet. Add a folder below.</div>'}
+   ${groups[g].map(f=>`<label class="item" style="margin:0;color:var(--ink)"><input type="checkbox" class="sp" value="${esc(f.path)}" ${sel.has(f.path)?'checked':''}><div class="grow"><div><span class="open" onclick="event.preventDefault();view(${esc(JSON.stringify(f.path))})">${esc(f.label.split('/').pop())}</span></div><div class="muted mono">${esc(f.label)} · ${Math.round(f.size/1000)} KB</div></div></label>`).join('')}</div>`).join('')||'<div class="card muted">Nothing found yet. Add a folder below.</div>'}
   ${blocked.length?`<div class="card" style="border-color:var(--warn)"><b>macOS blocked reading:</b> <span class="mono">${blocked.map(b=>esc(b.label)).join(', ')}</span><p class="muted">Start the lab by double-clicking <b>Start Capability Lab</b> in Finder (it runs from Terminal, which has access), or add files one by one below.</p></div>`:''}
   <div class="card"><h3>Other files to include</h3><p class="muted">Paste the full path of any file Claude should treat as your standing rules, one per line. Tip: drag a file from Finder into this box.</p>
    <textarea id="extra" style="min-height:60px" class="mono">${esc((d.saved&&d.saved.extra||[]).join('\n'))}</textarea></div>
@@ -146,7 +156,7 @@ V.add=async()=>{
      <label>Instructions</label><textarea id="val" style="min-height:160px" placeholder="Paste the SKILL.md, agent definition, or rules here"></textarea>`:''}
   <div class="row" style="margin-top:12px"><button class="primary" id="scanb" onclick="doImport('${mode}')">Find capabilities</button><span id="ist" class="muted"></span></div></div>
   <div id="found"></div>
-  ${S.cands.length?`<div class="card"><h3>Ready to test</h3>${S.cands.map(c=>`<label class="item" style="margin:0;color:var(--ink)"><input type="radio" name="cand" value="${esc(c.id)}" ${S.cand==c.id?'checked':''} onchange="S.cand=this.value;save()"><div class="grow"><b>${esc(c.name)}</b> ${c.skills.map(s=>`<span class="tag">skill: ${esc(s)}</span>`).join(' ')} ${c.agents.map(s=>`<span class="tag">agent: ${esc(s)}</span>`).join(' ')} ${c.has_rules?'<span class="tag">rules</span>':''}<div class="muted">${esc(c.source)} · ${esc(c.created)}</div></div></label>`).join('')}</div>`:''}
+  ${S.cands.length?`<div class="card"><h3>Ready to test</h3>${S.cands.map(c=>`<label class="item" style="margin:0;color:var(--ink)"><input type="radio" name="cand" value="${esc(c.id)}" ${S.cand==c.id?'checked':''} onchange="S.cand=this.value;save()"><div class="grow"><b>${esc(c.name)}</b> ${c.skills.map(s=>`<span class="tag">skill: ${esc(s)}</span>`).join(' ')} ${c.agents.map(s=>`<span class="tag">agent: ${esc(s)}</span>`).join(' ')} ${c.has_rules?'<span class="tag">rules</span>':''}<div class="muted">${esc(c.source)} · ${esc(c.created)}</div><div class="muted">Read: ${(c.files||[]).map(f=>`<span class="open" onclick="event.preventDefault();view(${esc(JSON.stringify(f.path))})">${esc(f.label)}</span>`).join(' · ')}</div></div></label>`).join('')}</div>`:''}
   ${S.cands.length?nextBtn():''}`;
   if(S.imp)showFound(S.imp);
 };
@@ -160,7 +170,7 @@ async function doImport(kind){
 function showFound(m){
   const usable=m.items.filter(i=>!i.blocked);
   $('#found').innerHTML=`<div class="card"><h3>Found in ${esc(m.source)}</h3>
-  ${m.items.length?m.items.map(i=>`<label class="item" style="margin:0;color:var(--ink)"><input type="checkbox" class="fi" value="${i.id}" ${i.blocked?'disabled':(usable.length<=3?'checked':'')}><div class="grow"><span class="tag ${i.blocked?'bad':''}">${esc(i.type)}</span> <b>${esc(i.name)}</b><div class="muted">${esc(i.description).slice(0,220)}</div>${i.warning?`<div class="muted" style="color:var(--warn)">${esc(i.warning)}</div>`:''}<div class="muted mono">${esc(i.path)}</div></div></label>`).join(''):'<p class="muted">No skills, agents, or rules found here.</p>'}
+  ${m.items.length?m.items.map(i=>`<label class="item" style="margin:0;color:var(--ink)"><input type="checkbox" class="fi" value="${i.id}" ${i.blocked?'disabled':(usable.length<=3?'checked':'')}><div class="grow"><span class="tag ${i.blocked?'bad':''}">${esc(i.type)}</span> <b class="${i.blocked?'':'open'}" onclick="${i.blocked?'':`event.preventDefault();view(${esc(JSON.stringify(m.root+'/'+i.path))})`}">${esc(i.name)}</b><div class="muted">${esc(i.description).slice(0,220)}</div>${i.warning?`<div class="muted" style="color:var(--warn)">${esc(i.warning)}</div>`:''}<div class="muted mono">${esc(i.path)}</div></div></label>`).join(''):'<p class="muted">No skills, agents, or rules found here.</p>'}
   ${usable.length?`<label>Give this bundle a name</label><div class="row"><input type="text" id="cname" class="grow" value="${esc(usable.length==1?usable[0].name:'')}" style="width:auto"><button class="primary" onclick="makeCand()">Use selected</button></div>`:''}</div>`;
 }
 async function makeCand(){const selected=[...document.querySelectorAll('.fi:checked')].map(x=>x.value);try{const c=await api('/api/candidate',{import_id:S.imp.id,selected,name:$('#cname').value});S.cand=c.id;S.imp=null;save();render()}catch(e){alert(e.message)}}
@@ -245,6 +255,38 @@ async function adopt(mode){
    $('#ad').innerHTML=mode=='pack'?`<span class="ok">Pack saved:</span> <span class="mono">${esc(r.path)}</span> <button onclick="api('/api/open',{path:'${esc(r.path)}'})">Show in Finder</button>`:
     `<span class="ok">Installed.</span> <span class="muted mono">${esc(r.installed.join(', ')||'(no skills or agents)')}</span>${r.rules_to_copy?`<p class="muted">Rules aren't installed automatically. Add this to your memory or CLAUDE.md if you want it always on:</p><pre>${esc(r.rules_to_copy)}</pre>`:''}`}
   catch(e){$('#ad').innerHTML=`<span class="err">${esc(e.message)}</span>`}
+}
+// ---- file viewer: formatted reading view of any config file ----
+let VF=null;
+async function view(path){
+  try{VF=await api('/api/file?path='+encodeURIComponent(path));VF.src=false;drawView();$('#viewer').classList.add('on')}catch(e){alert(e.message)}
+}
+function closeView(){$('#viewer').classList.remove('on');$('#vb').innerHTML=''}
+function toggleSrc(){VF.src=!VF.src;drawView()}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeView()});
+function splitFM(t){const m=t.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);if(!m)return[[],t];const rows=[];let k=null;
+  m[1].split('\n').forEach(l=>{const mm=l.match(/^([\w-]+):\s*(.*)$/);if(mm){k=mm[1];rows.push([k,mm[2].replace(/^[>|][-+]?$/,'').replace(/^(["'])(.*)\1$/,'$2')])}else if(k&&/^\s/.test(l)){const r=rows[rows.length-1];r[1]+=(/^\s+[\w-]+:/.test(l)?'\n':' ')+l.trim()}});
+  return[rows,t.slice(m[0].length)]}
+function drawView(){
+  const name=VF.label.split('/').pop();$('#vt').textContent=name;$('#vp').textContent=VF.label;
+  $('#vsrc').textContent=VF.src?'Formatted':'Show source';
+  const isMd=/\.(md|markdown)$/i.test(name);
+  if(VF.src||!isMd||!window.marked){$('#vb').innerHTML=`<pre class="mono">${esc(VF.text)}</pre>`;return}
+  const[fm,body]=splitFM(VF.text);
+  const md=body.replace(/\[\[([^\]|]+)\|?([^\]]*)\]\]/g,(_,a,b)=>`<span class="wl">${esc(b||a)}</span>`);
+  const cs=getComputedStyle(document.documentElement),v=n=>cs.getPropertyValue(n).trim();
+  const css=`body{font:16px/1.65 Georgia,"Iowan Old Style",serif;color:${v('--ink')};background:${v('--panel')};max-width:700px;margin:0 auto;padding:24px 28px 60px}
+   h1,h2,h3,h4{font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.25;margin:1.4em 0 .5em}h1{font-size:26px}h2{font-size:20px;border-bottom:1px solid ${v('--line')};padding-bottom:4px}h3{font-size:17px}
+   a{color:${v('--accent')}}code{font:13px ui-monospace,Menlo,monospace;background:${v('--bg')};padding:1px 5px;border-radius:4px}
+   pre{background:${v('--bg')};border:1px solid ${v('--line')};border-radius:8px;padding:12px;overflow:auto}pre code{padding:0;background:none}
+   blockquote{margin:1em 0;padding:2px 16px;border-left:3px solid ${v('--accent')};color:${v('--muted')}}
+   table{border-collapse:collapse;margin:1em 0;font:14px/1.45 -apple-system,sans-serif;width:100%}th,td{border:1px solid ${v('--line')};padding:6px 9px;text-align:left;vertical-align:top}th{background:${v('--bg')}}
+   .fm{font:13px/1.45 -apple-system,sans-serif;background:${v('--bg')};border:1px solid ${v('--line')};border-radius:8px;padding:8px 12px;margin-bottom:20px}.fm td{border:0;padding:3px 8px}.fm td{white-space:pre-line}.fm td:first-child{color:${v('--muted')};white-space:nowrap;width:1%}
+   .wl{color:${v('--accent')};border-bottom:1px dotted ${v('--accent')}}hr{border:0;border-top:1px solid ${v('--line')}}img{max-width:100%}li{margin:.2em 0}`;
+  const fmHtml=fm.length?`<table class="fm">${fm.map(([k,val])=>`<tr><td>${esc(k)}</td><td>${esc(val)}</td></tr>`).join('')}</table>`:'';
+  const html=`<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>${css}</style></head><body>${fmHtml}${marked.parse(md)}</body></html>`;
+  // Sandboxed with no scripts: imported files are untrusted, so nothing in them can run.
+  $('#vb').innerHTML='';const f=document.createElement('iframe');f.setAttribute('sandbox','allow-popups allow-popups-to-escape-sandbox');f.srcdoc=html;$('#vb').appendChild(f);
 }
 render();
 </script>

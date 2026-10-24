@@ -310,8 +310,24 @@ def build_candidate(body):
 def list_candidates():
     out = []
     for m in sorted(glob.glob(os.path.join(DATA, "candidates", "*", "meta.json")), key=os.path.getmtime, reverse=True):
-        out.append(jload(m, {}))
+        c = jload(m, {})
+        cdir = os.path.dirname(m)
+        files = sorted(glob.glob(os.path.join(cdir, "plugin", "**", "*.md"), recursive=True))
+        if read_text(os.path.join(cdir, "rules.md")).strip():
+            files.append(os.path.join(cdir, "rules.md"))
+        c["files"] = [{"path": f, "label": os.path.relpath(f, os.path.join(cdir, "plugin")) if "/plugin/" in f else "rules.md"} for f in files]
+        out.append(c)
     return out
+
+
+READABLE = {".md", ".markdown", ".txt", ".json", ".yaml", ".yml"}
+
+
+def read_file(path):
+    p = under_home(path or "")
+    if not p or not os.path.isfile(p) or os.path.splitext(p)[1].lower() not in READABLE:
+        raise ValueError("Can't open that file.")
+    return {"path": p, "label": p.replace(HOME, "~"), "text": read_text(p, 400_000)}
 
 
 # ---------- step 4: tasks ----------
@@ -669,9 +685,18 @@ class H(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length") or 0)
         return json.loads(self.rfile.read(n) or b"{}")
 
+    def host_ok(self):
+        host = (self.headers.get("Host") or "").split(":")[0]
+        return host in ("127.0.0.1", "localhost")
+
     def do_GET(self):
         path = urlparse(self.path).path
+        if not self.host_ok():
+            return self.send({"error": "bad host"}, 403)
         try:
+            if path == "/api/file":
+                from urllib.parse import parse_qs
+                return self.send(read_file(parse_qs(urlparse(self.path).query).get("path", [""])[0]))
             if path in ("/", "/index.html"):
                 return self.send(open(os.path.join(APP, "static", "index.html"), "rb").read(), ctype="text/html; charset=utf-8")
             if path == "/api/connect":
@@ -697,6 +722,8 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+        if not self.host_ok():
+            return self.send({"error": "bad host"}, 403)
         try:
             b = self.body()
             if path == "/api/setup":
