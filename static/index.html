@@ -16,7 +16,8 @@
   --accent:#7fb0dc;--accent-ink:#0d1a26;--good:#5cc896;--bad:#e8826b;--warn:#e0b04f;--soft:#1f2a35;}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-.wrap{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+.wrap{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh}
+main{min-width:0}
 nav{border-right:1px solid var(--line);padding:24px 16px;position:sticky;top:0;height:100vh}
 nav h1{font-size:17px;margin:0 0 4px}
 nav .sub{color:var(--muted);font-size:13px;margin-bottom:24px}
@@ -82,7 +83,50 @@ table.tests tbody tr{cursor:pointer}table.tests tbody tr:hover{background:var(--
 .diff .add{background:color-mix(in srgb,var(--good) 18%,transparent)}.diff .del{background:color-mix(in srgb,var(--bad) 18%,transparent);text-decoration:line-through}
 .diff .ctx{color:var(--muted)}.diff .gap{color:var(--muted);font-style:italic;padding:4px 0}
 .toastui-editor-defaultUI{border:0!important}
-@media (max-width:760px){.wrap{grid-template-columns:1fr}nav{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}
+
+main.wide{max-width:1200px}
+.small{font-size:12.5px}
+button.link{background:none;border:0;padding:0;color:var(--accent);cursor:pointer;font:inherit}
+button.link:hover{text-decoration:underline}
+button.big{padding:10px 18px;font-size:15px}
+.dhead{display:flex;align-items:center;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.kpi{all:unset;cursor:pointer;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:2px;border-top:3px solid var(--line);transition:transform .12s,border-color .12s}
+.kpi:hover{transform:translateY(-1px);border-color:var(--accent)}
+.kpi .n{font-size:30px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}.kpi .l{color:var(--muted);font-size:13px}
+.kpi.k-good{border-top-color:var(--good)}.kpi.k-good .n{color:var(--good)}
+.kpi.k-acc{border-top-color:var(--accent)}.kpi.k-acc .n{color:var(--accent)}
+.kpi.k-bad{border-top-color:var(--bad)}.kpi.k-bad .n{color:var(--bad)}
+.dgrid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:16px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+.ptitle{font-weight:650;font-size:15px;margin-bottom:8px}
+.stitle{font-weight:650;font-size:15px;margin:26px 0 10px}
+.summary{color:var(--ink);margin:10px 0 14px;line-height:1.55}
+.opcard{border:1px solid var(--line);border-left:4px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--bg)}
+.opcard.imp-high{border-left-color:var(--good)}.opcard.imp-medium{border-left-color:var(--accent)}.opcard.imp-low{border-left-color:var(--muted)}
+.opcard.closed{opacity:.55;padding:8px 14px}
+.optitle{font-weight:600}.opmeta{color:var(--muted);font-size:12px;margin:1px 0 4px}
+.opbtns{display:flex;flex-direction:column;align-items:flex-end;gap:6px;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;padding:3px 9px;border-radius:99px;background:var(--soft);color:var(--ink);border:1px solid var(--line)}
+.chip.q{background:transparent;color:var(--muted);font-style:italic}
+.chip.open{color:var(--accent);text-decoration:none;cursor:pointer}
+.layer{padding:10px 0;border-top:1px solid var(--line)}.layer:first-of-type{border-top:0}
+.lname{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:6px}
+.lname .small{text-transform:none;letter-spacing:0;font-weight:400}
+.lrow{display:flex;align-items:center;gap:8px;padding:3px 0}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--muted)}.dot.g{background:var(--good)}.dot.r{background:var(--bad)}.dot.y{background:var(--warn)}
+.dcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.dcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.dcard .vline{font-weight:600;margin-top:6px}.dcard .dact{margin-top:auto;padding-top:10px;gap:8px}
+.rbar{display:flex;height:6px;border-radius:99px;overflow:hidden;background:var(--line);margin:6px 0 3px;max-width:240px}
+.rbar i{display:block;height:100%}.rbar .w{background:var(--good)}.rbar .l{background:var(--bad)}.rbar .t{background:var(--muted);opacity:.5}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;font-weight:400}
+.seg button{border:0;border-radius:0;padding:6px 12px;font-size:13px;background:var(--panel)}.seg button.on{background:var(--soft);color:var(--accent);font-weight:600}
+.dtable td,.dtable th{padding:10px 14px}
+@media (max-width:980px){.dgrid{grid-template-columns:1fr}}
+@media (max-width:640px){.kpis{grid-template-columns:1fr 1fr}.opcard .row{flex-direction:column}.opbtns{align-items:flex-start}}
+@media (max-width:760px){.wrap{grid-template-columns:minmax(0,1fr)}nav{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}
   main{padding:20px 16px}.cols,.stats{grid-template-columns:1fr 1fr}}
 @media (max-width:480px){.cols,.stats{grid-template-columns:1fr}}
 </style>
@@ -118,7 +162,7 @@ function nav(){ $('#steps').innerHTML=STEPS.map((s,i)=>`<div class="step ${i==S.
 function go(i){S.step=i;save();render()}
 function nextBtn(label='Next'){return `<div class="next">${S.step>0?`<button onclick="go(${S.step-1})">Back</button>`:''}<button class="primary" onclick="go(${S.step+1})">${label} →</button></div>`}
 let chain=Promise.resolve();function render(){chain=chain.then(_render,_render);return chain}
-async function _render(){nav();const k=STEPS[S.step].k;$('#main').innerHTML='<p class="muted">Loading…</p>';try{await V[k]()}catch(e){$('#main').innerHTML=`<p class="err">${esc(e.message)}</p>`}nav()}
+async function _render(){nav();const k=STEPS[S.step].k;$('#main').classList.toggle('wide',k=='dashboard');$('#main').innerHTML='<p class="muted">Loading…</p>';try{await V[k]()}catch(e){$('#main').innerHTML=`<p class="err">${esc(e.message)}</p>`}nav()}
 
 const V={};
 V.connect=async()=>{
@@ -350,87 +394,90 @@ async function pack(cid){try{const r=await api('/api/adopt',{candidate_id:cid,mo
 // ---- dashboard ----
 V.dashboard=async()=>{
   const d=await api('/api/dashboard');S.done.dashboard=true;
-  const C=d.candidates,inst=C.filter(c=>c.status=='installed'),pend=C.filter(c=>(c.status||'testing')=='testing'),rej=C.filter(c=>c.status=='rejected'||c.status=='uninstalled');
-  const res=l=>l?`<span class="win">${l.wins} better</span> · <span class="loss">${l.losses} worse</span> · ${l.ties} tie`:'<span class="muted">not tested yet</span>';
+  const sub=c=>{const x=c.skills.concat(c.agents).join(', ')||(c.has_rules?'rules':'');return x==c.name?'':x};
+  const C=d.candidates,inst=C.filter(c=>c.status=='installed'),pend=C.filter(c=>(c.status||'testing')=='testing').sort((a,b)=>(b.latest?1:0)-(a.latest?1:0)),rej=C.filter(c=>c.status=='rejected'||c.status=='uninstalled');
   const short=v=>{const h=(v||'').split(/[:.]/)[0];return{'Adopt':'Worth installing',"Don't adopt":'Better to reject'}[h]||h};
   const openRun=id=>`S.runId='${id}';save();go(5)`;
   const testIt=c=>`S.cand='${esc(c.id)}';save();go(4)`;
-  const anyRunning=d.runs.some(r=>r.state=='running');
-  $('#main').innerHTML=`<h2>Dashboard</h2>
-  <p class="lead">What's in your Claude setup now, what's waiting for a decision, and every test you've run.</p>
-  <div class="card" id="checkcard"><p class="muted">Loading setup check…</p></div>
-  <div class="stats" style="margin-bottom:16px">
-   <div class="stat"><div class="big win">${inst.length}</div><div class="muted">installed by the lab</div></div>
-   <div class="stat"><div class="big" style="color:var(--accent)">${pend.length}</div><div class="muted">waiting for a decision</div></div>
-   <div class="stat"><div class="big loss">${rej.length}</div><div class="muted">rejected or removed</div></div>
-   <div class="stat"><div class="big">${d.runs.length}</div><div class="muted">test runs${anyRunning?' · <span style="color:var(--accent)">one running</span>':''}</div></div>
+  const running=d.runs.filter(r=>r.state=='running');
+  const status=[inst.length?`${inst.length} capabilit${inst.length==1?'y':'ies'} installed`:'Nothing installed by the lab yet',
+    pend.length?`${pend.length} waiting for your decision`:'nothing waiting',running.length?`${running.length} test running`:''].filter(Boolean).join(' · ');
+  const tile=(n,label,cls,target)=>`<button class="kpi ${cls}" onclick="document.getElementById('${target}').scrollIntoView({behavior:'smooth',block:'start'})"><span class="n">${n}</span><span class="l">${label}</span></button>`;
+  const decCard=c=>`<div class="dcard"><div class="row" style="gap:8px"><b class="grow">${esc(c.name)}</b>${c.running?'<span class="tag">running</span>':''}</div>
+     <div class="muted small">${esc(sub(c))}</div>
+     ${c.latest?`<div class="vline">${esc(short(c.latest.verdict))}</div>${resBar(c.latest)}<div class="muted small">${c.latest.trigger?esc(c.latest.trigger):''}</div>`
+       :'<div class="vline muted">Not tested yet</div><div class="muted small">Run a test before deciding.</div>'}
+     <div class="row dact">${c.latest?`<button class="primary" onclick="decide('${esc(c.id)}','install')">Install</button><button onclick="decide('${esc(c.id)}','reject')">Reject</button><button class="link" onclick="${openRun(c.latest.run_id)}">Results</button>`
+       :`<button class="primary" onclick="${testIt(c)}">Run a test</button><button onclick="decide('${esc(c.id)}','reject')">Reject</button>`}</div></div>`;
+  const tab=S.dtab||'caps';
+  $('#main').innerHTML=`<div class="dhead"><div class="grow"><h2 style="margin:0">Dashboard</h2><div class="muted">${status}</div></div><div id="checkbtn"></div></div>
+  <div class="kpis">${tile(inst.length,'Installed','k-good','sec-setup')}${tile(pend.length,'Waiting for a decision','k-acc','sec-pending')}${tile(rej.length,'Rejected or removed','k-bad','sec-tables')}${tile(d.runs.length,'Test runs','','sec-tables')}</div>
+  <div class="dgrid">
+   <section id="checkcard" class="panel"><p class="muted">Loading setup check…</p></section>
+   <section id="sec-setup" class="panel">
+    <div class="ptitle">Your Claude setup now</div>
+    <div class="muted small" style="margin-bottom:10px">In the order Claude meets it. Checked against the files on disk just now.</div>
+    <div id="readlayers"></div>
+    <div class="layer"><div class="lname">Installed by the lab</div>
+     ${inst.length?inst.map(c=>`<div class="lrow"><span class="dot ${c.files_ok?'g':'r'}"></span><span class="grow">${esc(c.name)}${c.files_ok?'':' <span class="err small">files missing</span>'}<span class="muted small"> · ${esc((c.decided||'').slice(0,10))}</span></span><button class="link" onclick="decide('${esc(c.id)}','uninstall')">Uninstall</button></div>`).join('')
+       :'<div class="muted small">None yet. Your Claude runs on your memory, rules and account skills.</div>'}</div>
+    ${d.outside.length?`<div class="layer"><div class="lname">Installed outside the lab</div><div class="chips">${d.outside.map(o=>`<span class="chip open" onclick="view(${esc(JSON.stringify(o.path))})">${esc(o.name)}</span>`).join('')}</div></div>`:''}
+    <div class="layer"><div class="lname">From your Claude account <span class="muted small">· managed in Claude's settings</span></div><div class="chips">${d.synced.map(x=>`<span class="chip">${esc(x)}</span>`).join('')||'<span class="muted small">none</span>'}</div></div>
+    <div id="issuelayer"></div>
+   </section>
   </div>
-
-  <div class="card"><h3>Your Claude setup now</h3>
-   <p class="muted" style="margin-top:0">Checked against the files in <span class="mono">${esc(d.claude_dir)}</span> just now.</p>
-   ${inst.length?inst.map(c=>`<div class="item"><div class="grow"><b>${esc(c.name)}</b> ${statusTag('installed')} ${c.files_ok?'<span class="muted">files present</span>':'<span class="err">files missing</span>'}
-     <div class="muted">Installed ${esc(c.decided)}${c.latest?` · last test: ${res(c.latest)}`:''}</div>
-     ${c.files_ok?'':'<div class="muted">Someone removed these files outside the lab. Click Uninstall to record that, then Test again to reinstall.</div>'}</div>
-     <div class="row" style="flex-wrap:nowrap">${c.latest?`<button onclick="${openRun(c.latest.run_id)}">Results</button>`:''}${decisionButtons(c)}</div></div>`).join('')
-   :'<p>Nothing installed by the lab yet. Your Claude is running on your memory, rules and account skills only.</p>'}
-   ${d.outside.length?`<div style="margin-top:12px"><b>Installed outside the lab</b> <span class="muted">(${d.outside.length})</span><div class="muted">${d.outside.map(o=>`<span class="open" onclick="view(${esc(JSON.stringify(o.path))})">${esc(o.name)}</span> (${o.type})`).join(' · ')}</div></div>`:''}
-   ${d.synced.length?`<div style="margin-top:12px"><b>From your Claude account</b> <span class="muted">(${d.synced.length}, managed in Claude's settings)</span><div class="muted">${d.synced.map(esc).join(' · ')}</div></div>`:''}
-  </div>
-
-  <div class="card"><h3>Needs a decision <span class="muted">(${pend.length})</span></h3>
-   ${pend.length?pend.map(c=>`<div class="item"><div class="grow"><b>${esc(c.name)}</b> ${statusTag('testing')}${c.running?' <span class="tag">test running</span>':''}
-     <div class="muted">${c.latest?`${esc(short(c.latest.verdict))} · ${res(c.latest)}${c.latest.trigger?` · ${esc(c.latest.trigger)}`:''}`:'Not tested yet. Run a test before deciding.'}</div></div>
-     <div class="row" style="flex-wrap:nowrap">${c.latest?`<button onclick="${openRun(c.latest.run_id)}">Results</button>`:`<button class="primary" onclick="${testIt(c)}">Run a test</button>`}${decisionButtons(c,!!c.latest)}</div></div>`).join('')
-   :'<p class="muted">Nothing waiting. <span class="open" onclick="go(2)">Try a new capability</span>.</p>'}
-  </div>
-
-  <div class="card"><h3>All capabilities <span class="muted">(${C.length})</span></h3>
-   ${C.length?`<table class="tests"><thead><tr><th>Capability</th><th>Status</th><th>Latest result</th><th>Runs</th><th style="white-space:nowrap">Avg cost without / with</th></tr></thead><tbody>
-   ${C.map(c=>`<tr onclick="${c.latest?openRun(c.latest.run_id):testIt(c)}"><td><b>${esc(c.name)}</b><div class="muted">${esc(c.skills.concat(c.agents).join(', ')||(c.has_rules?'rules':''))}</div></td>
-     <td>${statusTag(c.status)}<div class="muted">${esc(c.decided||c.created)}</div></td><td>${c.latest?`${esc(short(c.latest.verdict))}<div class="muted">${res(c.latest)}</div>`:'<span class="muted">not tested</span>'}</td>
-     <td>${c.runs}</td><td class="mono" style="white-space:nowrap">${c.latest?`$${c.latest.cost_baseline.toFixed(3)} / $${c.latest.cost_with.toFixed(3)}`:'–'}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">None yet.</p>'}
-  </div>
-
-  <div class="card"><h3>All runs <span class="muted">(${d.runs.length})</span></h3>
-   ${d.runs.length?`<table class="tests"><thead><tr><th>When</th><th>Capability</th><th>Tests</th><th>Model</th><th>Result</th></tr></thead><tbody>
-   ${d.runs.map(r=>`<tr onclick="${openRun(r.id)}"><td style="white-space:nowrap">${esc(r.id.replace(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2}).*/,'$1-$2-$3 $4:$5'))}</td><td>${esc(r.candidate||'')}</td><td>${r.tasks} × ${r.reps}</td><td>${esc(r.model)}</td>
-     <td>${r.summary?`${esc(short(r.summary.verdict))}<div class="muted">${res(r.summary)}${r.summary.errors?` · <span class="err">${r.summary.errors} errors</span>`:''}</div>`:r.state=='running'?`<span style="color:var(--accent)">running${r.progress?` ${r.progress[0]}/${r.progress[1]}`:''}</span>`:'<span class="muted">stopped before finishing</span>'}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">No runs yet.</p>'}
-  </div>`;
+  <div id="sec-pending" class="stitle">Needs a decision <span class="muted">(${pend.length})</span></div>
+  ${pend.length?`<div class="dcards">${pend.map(decCard).join('')}</div>`:`<div class="panel muted">Nothing waiting. <span class="open" onclick="go(2)">Try a new capability →</span></div>`}
+  <div id="sec-tables" class="stitle row"><span class="grow">History</span>
+   <span class="seg"><button class="${tab=='caps'?'on':''}" onclick="S.dtab='caps';render()">Capabilities (${C.length})</button><button class="${tab=='runs'?'on':''}" onclick="S.dtab='runs';render()">Runs (${d.runs.length})</button></span></div>
+  <div class="panel" style="padding:0;overflow-x:auto">${tab=='caps'?(C.length?`<table class="tests dtable"><thead><tr><th>Capability</th><th>Status</th><th>Latest result</th><th>Runs</th><th>Avg cost without / with</th></tr></thead><tbody>
+   ${C.map(c=>`<tr onclick="${c.latest?openRun(c.latest.run_id):testIt(c)}"><td><b>${esc(c.name)}</b><div class="muted small">${esc(sub(c))}</div></td>
+     <td>${statusTag(c.status)}<div class="muted small">${esc((c.decided||c.created||'').slice(0,10))}</div></td><td style="min-width:180px">${c.latest?`<div class="small">${esc(short(c.latest.verdict))}</div>${resBar(c.latest)}`:'<span class="muted small">not tested</span>'}</td>
+     <td>${c.runs}</td><td class="mono small" style="white-space:nowrap">${c.latest?`$${c.latest.cost_baseline.toFixed(3)} / $${c.latest.cost_with.toFixed(3)}`:'–'}</td></tr>`).join('')}</tbody></table>`:'<p class="muted" style="padding:16px">None yet.</p>')
+   :(d.runs.length?`<table class="tests dtable"><thead><tr><th>When</th><th>Capability</th><th>Tests</th><th>Model</th><th>Result</th></tr></thead><tbody>
+   ${d.runs.map(r=>`<tr onclick="${openRun(r.id)}"><td style="white-space:nowrap" class="small">${esc(r.id.replace(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2}).*/,'$1-$2-$3 $4:$5'))}</td><td><b>${esc(r.candidate||'')}</b></td><td class="small">${r.tasks} × ${r.reps}</td><td class="small">${esc(r.model)}</td>
+     <td style="min-width:180px">${r.summary?`<div class="small">${esc(short(r.summary.verdict))}${r.summary.errors?` · <span class="err">${r.summary.errors} errors</span>`:''}</div>${resBar(r.summary)}`:r.state=='running'?`<span style="color:var(--accent)" class="small">running${r.progress?` ${r.progress[0]}/${r.progress[1]}`:''}</span>`:'<span class="muted small">stopped before finishing</span>'}</td></tr>`).join('')}</tbody></table>`:'<p class="muted" style="padding:16px">No runs yet.</p>')}</div>`;
   drawCheck();
-  if(anyRunning)setTimeout(()=>{if(STEPS[S.step].k=='dashboard')render()},5000);
+  if(running.length)setTimeout(()=>{if(STEPS[S.step].k=='dashboard')render()},5000);
 };
+function resBar(l){const n=(l.wins+l.losses+l.ties)||1,w=x=>(100*x/n).toFixed(1);
+  return `<div class="rbar" title="${l.wins} better · ${l.losses} worse · ${l.ties} tie"><i class="w" style="width:${w(l.wins)}%"></i><i class="t" style="width:${w(l.ties)}%"></i><i class="l" style="width:${w(l.losses)}%"></i></div>
+   <div class="muted small"><span class="win">${l.wins} better</span> · <span class="loss">${l.losses} worse</span> · ${l.ties} tie</div>`}
 // ---- setup check ----
 let CHK=null;
 async function drawCheck(){
   const box=$('#checkcard');if(!box)return;
   const r=await api('/api/check');CHK=r.check;const live=r.live;
-  if(live&&live.state=='running'){box.innerHTML=`<h3>Setup check</h3><p><b>${esc(live.stage)}…</b></p><div class="bar"><div style="width:${live.stage.startsWith('Taking')?15:live.stage.startsWith('Reading')?35:70}%"></div></div>`;
+  const btnBox=$('#checkbtn');
+  if(live&&live.state=='running'){if(btnBox)btnBox.innerHTML=`<button class="primary" disabled>Checking…</button>`;
+    box.innerHTML=`<div class="ptitle">Setup check</div><p><b>${esc(live.stage)}…</b></p><div class="bar"><div style="width:${live.stage.startsWith('Taking')?15:live.stage.startsWith('Reading')?35:70}%"></div></div>`;
     setTimeout(()=>{if(STEPS[S.step].k=='dashboard')drawCheck()},3000);return}
-  const btn=`<button class="primary" onclick="runCheck(this)">${CHK?'Check again':'Check my setup'}</button>`;
+  if(btnBox)btnBox.innerHTML=`<button class="primary big" onclick="runCheck(this)">${CHK?'Check my setup again':'Check my setup'}</button>`;
   const err=live&&live.state=='error'?`<p class="err">The last check failed: ${esc(live.error)}</p>`:'';
-  if(!CHK){box.innerHTML=`<h3>Setup check</h3><p>One button: the lab reads your memory, instructions and rules pages, looks at what you've asked Claude for in past sessions, and asks Claude for a plain assessment and the few changes most likely to help. Each suggestion comes with a button to act on it.</p>
-    <p class="muted">The reading happens on this Mac. Then one Sonnet review, usually 10 to 40 cents. Nothing changes until you choose to act.</p>${err}${btn}`;return}
+  if(!CHK){box.innerHTML=`<div class="ptitle">Setup check</div><p>The lab reads your memory, instructions and rules pages, looks at what you've asked Claude for in past sessions, and asks Claude for a plain assessment and the few changes most likely to help. Each suggestion comes with a button to act on it.</p>
+    <p class="muted small">Reading happens on this Mac, then one Sonnet review, usually under 40 cents. Nothing changes until you act.</p>${err}`;return}
   const rep=CHK.report,inv=CHK.inventory,ev=CHK.evidence,prev=CHK.previous;
-  const ops=rep.opportunities||[];const open=ops.filter(o=>o.state=='open').length;
+  const ops=rep.opportunities||[];const open=ops.filter(o=>o.state=='open');
   const when=CHK.id.replace(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2}).*/,'$1-$2-$3 $4:$5');
-  const tagI=v=>`<span class="tag ${v=='high'?'st-good':v=='low'?'':'warn'}">${esc(v)} impact</span>`;
-  box.innerHTML=`<div class="row"><h3 class="grow" style="margin:0">Setup check <span class="muted" style="font-weight:400">· ${when}</span></h3>${btn}</div>${err}
-   <p>${esc(rep.summary||'')}</p>
-   <p class="muted">Claude reads about ${inv.always_tokens.toLocaleString()} tokens of your instructions at the start of every session · ${inv.on_demand.length} files read when relevant · ${ev.sessions} past sessions reviewed · ${inv.issues.length} mechanical issue${inv.issues.length==1?'':'s'}${prev?` (was ${prev.issues} on ${prev.id.slice(0,4)}-${prev.id.slice(4,6)}-${prev.id.slice(6,8)})`:''}</p>
-   <h3 style="margin-top:18px">Best opportunities <span class="muted">(${open} open of ${ops.length})</span></h3>
-   ${ops.map((o,i)=>`<div class="item" style="${o.state!='open'?'opacity:.55':''}"><div class="grow">
-      <b>${i+1}. ${esc(o.title)}</b> ${tagI(o.impact)} <span class="tag">${esc(o.effort)} effort</span>${o.state=='done'?' <span class="tag st-good">done ✓</span>':o.state=='dismissed'?' <span class="tag">dismissed</span>':''}
-      <div>${esc(o.why)}</div>${(o.evidence||[]).length?`<div class="muted">Evidence: ${o.evidence.map(e=>'“'+esc(e)+'”').join(' · ')}</div>`:''}
+  const order=[...ops.keys()].sort((x,y)=>(ops[x].state=='open'?0:1)-(ops[y].state=='open'?0:1)||x-y);
+  box.innerHTML=`<div class="row"><div class="ptitle grow" style="margin:0">Best opportunities <span class="muted" style="font-weight:400">· ${open.length} open of ${ops.length}</span></div><span class="muted small">checked ${when}</span></div>
+   ${err}<p class="summary">${esc(rep.summary||'')}</p>
+   ${order.map(i=>{const o=ops[i];return `<div class="opcard imp-${esc(o.impact)} ${o.state!='open'?'closed':''}"><div class="row" style="align-items:flex-start;gap:12px"><div class="grow">
+      <div class="optitle">${esc(o.title)}${o.state=='done'?' <span class="tag st-good">done ✓</span>':o.state=='dismissed'?' <span class="tag">dismissed</span>':''}</div>
+      <div class="opmeta">${esc(o.impact)} impact · ${esc(o.effort)} effort</div>
+      ${o.state=='open'?`<div>${esc(o.why)}</div>${(o.evidence||[]).length?`<div class="chips" style="margin-top:6px">${o.evidence.map(e=>`<span class="chip q">“${esc(e)}”</span>`).join('')}</div>`:''}`:''}
       <div id="op-${i}"></div></div>
-      <div class="row" style="flex-wrap:nowrap;align-items:flex-start">${o.state=='open'?actionButton(o,i)+`<button onclick="markOp(${i},'done')">Done</button><button onclick="markOp(${i},'dismissed')">Dismiss</button>`:`<button onclick="markOp(${i},'open')">Reopen</button>`}</div></div>`).join('')}
-   <details style="margin-top:14px"><summary class="muted">What your setup does, piece by piece</summary>
-     <table class="tests"><tbody>${(rep.pieces||[]).map(p=>`<tr style="cursor:default"><td><b>${esc(p.name)}</b></td><td>${esc(p.what_it_does)}</td><td class="muted">${esc(p.assessment)}</td></tr>`).join('')}</tbody></table></details>
-   <details><summary class="muted">Mechanical issues (${inv.issues.length})</summary>
-     ${inv.issues.map(x=>`<div class="item"><div class="grow"><span class="tag ${x.severity=='high'?'bad':x.severity=='medium'?'warn':''}">${esc(x.severity)}</span> <b>${esc(x.title)}</b><div class="muted">${esc(x.detail)}</div></div>${/\.md$/.test(x.path)?`<button onclick="view(${esc(JSON.stringify(x.path))})">Open</button>`:''}</div>`).join('')||'<p class="muted">None.</p>'}</details>
-   <details><summary class="muted">What Claude reads, and when</summary>
-     <p><b>Every session:</b> ${inv.always.map(e=>`<span class="open" onclick="view(${esc(JSON.stringify(e.path))})">${esc(e.label.split('/').pop())}</span> (~${e.tokens} tokens)`).join(' · ')||'nothing'}</p>
-     <p><b>When relevant:</b> ${inv.on_demand.map(e=>`<span class="open" onclick="view(${esc(JSON.stringify(e.path))})">${esc(e.label.split('/').pop())}</span>`).join(' · ')}</p>
-     <p class="muted">Skills from your Claude account: ${esc(inv.synced.join(', ')||'none')}</p></details>`;
+      <div class="opbtns">${o.state=='open'?actionButton(o,i)+`<div class="small"><button class="link" onclick="markOp(${i},'done')">Done</button> · <button class="link" onclick="markOp(${i},'dismissed')">Dismiss</button></div>`:`<button class="link" onclick="markOp(${i},'open')">Reopen</button>`}</div></div></div>`}).join('')}
+   <details style="margin-top:12px"><summary class="muted small">What your setup does, piece by piece</summary>
+     <table class="tests"><tbody>${(rep.pieces||[]).map(p=>`<tr style="cursor:default"><td><b>${esc(p.name)}</b></td><td>${esc(p.what_it_does)}</td><td class="muted">${esc(p.assessment)}</td></tr>`).join('')}</tbody></table></details>`;
+  const rl=$('#readlayers');
+  if(rl)rl.innerHTML=`<div class="layer"><div class="lname">Read every session <span class="muted small">· about ${inv.always_tokens.toLocaleString()} tokens</span></div><div class="chips">${inv.always.map(e=>`<span class="chip open" onclick="view(${esc(JSON.stringify(e.path))})">${esc(e.label.split('/').pop())}</span>`).join('')||'<span class="muted small">nothing</span>'}</div></div>
+    <div class="layer"><div class="lname">Read when relevant <span class="muted small">· ${inv.on_demand.length} files</span></div><div class="chips">${inv.on_demand.map(e=>`<span class="chip open" onclick="view(${esc(JSON.stringify(e.path))})">${esc(e.label.split('/').pop())}</span>`).join('')}</div></div>
+`;
+  const il=$('#issuelayer');
+  if(il)il.innerHTML=`<div class="layer"><div class="lname">Issues found <span class="muted small">· ${inv.issues.length}${prev?`, was ${prev.issues}`:''}</span></div>
+     ${inv.issues.map(x=>`<div class="lrow"><span class="dot ${x.severity=='high'?'r':x.severity=='medium'?'y':'n'}"></span><span class="grow small">${esc(x.title)}</span>${/\.md$/.test(x.path)?`<button class="link" onclick="view(${esc(JSON.stringify(x.path))})">Open</button>`:''}</div>`).join('')||'<div class="muted small">None.</div>'}</div>
+    <div class="muted small">${ev.sessions} past sessions reviewed.</div>`;
 }
 function actionButton(o,i){const a=o.action||{};
   const L={test_catalog:'Test it',draft_skill:'Draft the skill',save_memory:'Review and save',edit_file:'Open file',create_claude_md:'Review and create',ask_claude:'Copy prompt'}[a.type];
