@@ -319,7 +319,7 @@ def list_candidates():
 BELL_STARTERS = [
     {"prompt": "Draft a short LinkedIn post announcing a new Homebrew AI Club cohort for people who want to build their own AI tools. Under 150 words.",
      "rubric": "Plain voice, no hype words or intensifiers, at most one em-dash, a concrete reason to join, a clear next step."},
-    {"prompt": "Write a warm two-paragraph acceptance email to an applicant admitted to the AI and Civilization seminar. Tuition is $180; mention that financial assistance is available. Sign as Sunil.",
+    {"prompt": "Write a warm two-paragraph acceptance email to an applicant admitted to the AI and Civilization seminar. Tuition is $180; mention that financial assistance is available. Sign as the program director.",
      "rubric": "Specific and warm without gushing; includes price, what happens next, and who to contact; no 'not X, but Y' constructions."},
     {"prompt": "Summarize the main argument of the Asilomar 1975 recombinant DNA conference in 200 words for a seminar handout, with sources.",
      "rubric": "Accurate, cites sources with URLs, readable by a non-specialist, no invented facts."},
@@ -737,7 +737,8 @@ class H(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     os.chdir(APP)
     if not os.path.exists(os.path.join(DATA, "roots.json")):
-        vault = HOME + "/Library/Mobile Documents/iCloud~md~obsidian/Documents/Icloud Vault"
-        jsave(os.path.join(DATA, "roots.json"), [vault] if os.path.isdir(vault) else [])
+        # Start with any Obsidian vaults in iCloud; users can add more folders in step 2.
+        vaults = glob.glob(HOME + "/Library/Mobile Documents/iCloud~md~obsidian/Documents/*/")
+        jsave(os.path.join(DATA, "roots.json"), [v.rstrip("/") for v in vaults])
     print("Capability Lab running at http://127.0.0.1:%d" % PORT)
     ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
