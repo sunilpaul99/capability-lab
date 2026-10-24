@@ -127,8 +127,23 @@ def scan_setup():
     for p in [HOME + "/.claude/CLAUDE.md"]:
         if os.path.isfile(p):
             add("instructions", p)
-    for mem in glob.glob(HOME + "/.claude/projects/*/memory/*.md"):
-        add("memory", mem)
+    for mdir in sorted(glob.glob(HOME + "/.claude/projects/*/memory")):
+        files = glob.glob(os.path.join(mdir, "*.md"))
+        index = os.path.join(mdir, "MEMORY.md")
+        order = []
+        if os.path.isfile(index):
+            add("memory", index, default=True)
+            items[-1]["role"] = "index"
+            for href in re.findall(r"\]\(([^)#\s]+\.md)\)", read_text(index)):
+                p = os.path.normpath(os.path.join(mdir, href))
+                if p in files and p not in order:
+                    order.append(p)
+        for mem in order:
+            add("memory", mem)
+            items[-1]["role"] = "listed"
+        for mem in sorted(f for f in files if f != index and f not in order):
+            add("memory", mem)
+            items[-1]["role"] = "unlisted" if os.path.isfile(index) else ""
     for sk in glob.glob(HOME + "/.claude/skills/*/SKILL.md"):
         add("skill (always loaded)", sk, default=True)
     for ag in glob.glob(HOME + "/.claude/agents/*.md"):
@@ -321,6 +336,47 @@ def list_candidates():
 
 
 READABLE = {".md", ".markdown", ".txt", ".json", ".yaml", ".yml"}
+
+
+def resolve_links(src, links):
+    """Map links found in a file to real files: relative paths and Obsidian [[wiki links]]."""
+    src = under_home(src or "")
+    if not src:
+        return []
+    here = os.path.dirname(src)
+    roots = [here, os.path.dirname(here)] + jload(os.path.join(DATA, "roots.json"), [])
+    out = []
+    for ln in links[:300]:
+        target = (ln.get("target") or "").split("#")[0].split("|")[0].strip()
+        found = None
+        if target and ln.get("kind") == "rel":
+            from urllib.parse import unquote
+            p = os.path.normpath(os.path.join(here, unquote(target)))
+            found = p if os.path.isfile(p) else None
+        elif target:
+            name = target if target.endswith(".md") else target + ".md"
+            for root in roots:
+                for c in (os.path.join(root, name), os.path.join(root, "pages", name)):
+                    if os.path.isfile(c):
+                        found = c
+                        break
+                if found:
+                    break
+            if not found:
+                # Memory-style links use the file's frontmatter name, which can differ from its filename.
+                for c in glob.glob(os.path.join(here, "*.md")):
+                    if frontmatter(read_text(c, 4000)).get("name") == target:
+                        found = c
+                        break
+            if not found:
+                for root in roots[2:]:
+                    hits = glob.glob(os.path.join(root, "**", os.path.basename(name)), recursive=True)
+                    if hits:
+                        found = hits[0]
+                        break
+        ok = found and under_home(found) and os.path.splitext(found)[1].lower() in READABLE
+        out.append(os.path.realpath(found) if ok else None)
+    return out
 
 
 def read_file(path):
@@ -749,6 +805,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send({"ok": True, "tasks": ts})
             if path == "/api/run":
                 return self.send(start_run(b))
+            if path == "/api/resolve":
+                return self.send(resolve_links(b.get("from"), b.get("links", [])))
             if path == "/api/adopt":
                 return self.send(adopt(b))
             if path == "/api/open":
