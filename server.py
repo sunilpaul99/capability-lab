@@ -383,7 +383,27 @@ def read_file(path):
     p = under_home(path or "")
     if not p or not os.path.isfile(p) or os.path.splitext(p)[1].lower() not in READABLE:
         raise ValueError("Can't open that file.")
-    return {"path": p, "label": p.replace(HOME, "~"), "text": read_text(p, 400_000)}
+    return {"path": p, "label": p.replace(HOME, "~"), "text": read_text(p, 400_000), "mtime": os.path.getmtime(p),
+            "editable": p.lower().endswith((".md", ".markdown")) and os.access(p, os.W_OK)}
+
+
+def save_file(body):
+    """Write an edited markdown file, refusing if it changed on disk since it was opened. Keeps a backup."""
+    p = under_home(body.get("path") or "")
+    if not p or not os.path.isfile(p) or not p.lower().endswith((".md", ".markdown")):
+        raise ValueError("Only existing markdown files can be edited.")
+    if abs(os.path.getmtime(p) - float(body.get("mtime") or 0)) > 0.001:
+        raise ValueError("This file changed on disk since you opened it (Obsidian or Claude may have edited it). "
+                         "Close and reopen it, then make your edit again.")
+    bdir = os.path.join(DATA, "backups", time.strftime("%Y-%m-%d"))
+    os.makedirs(bdir, exist_ok=True)
+    backup = os.path.join(bdir, time.strftime("%H%M%S-") + os.path.basename(p))
+    shutil.copy2(p, backup)
+    tmp = p + ".capability-lab.tmp"
+    with open(tmp, "w") as f:
+        f.write(body.get("text", ""))
+    os.replace(tmp, p)
+    return {"ok": True, "backup": backup.replace(HOME, "~"), "mtime": os.path.getmtime(p)}
 
 
 # ---------- step 4: tasks ----------
@@ -805,6 +825,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send({"ok": True, "tasks": ts})
             if path == "/api/run":
                 return self.send(start_run(b))
+            if path == "/api/save":
+                return self.send(save_file(b))
             if path == "/api/resolve":
                 return self.send(resolve_links(b.get("from"), b.get("links", [])))
             if path == "/api/adopt":

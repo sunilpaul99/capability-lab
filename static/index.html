@@ -69,6 +69,12 @@ details summary{cursor:pointer}
 #viewer .hd{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
 #viewer iframe{flex:1;border:0;width:100%;background:var(--panel)}
 #viewer pre{flex:1;margin:0;border:0;border-radius:0;max-height:none}
+.fmrow{display:grid;grid-template-columns:120px 1fr;gap:6px 10px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px}
+.fmrow .k{color:var(--muted)}.fmrow input{padding:5px 8px}.fmrow .raw{font:12px ui-monospace,Menlo,monospace;color:var(--muted);white-space:pre-wrap}
+.diff{flex:1;overflow:auto;padding:12px 16px;font:12.5px/1.5 ui-monospace,Menlo,monospace;white-space:pre-wrap}
+.diff .add{background:color-mix(in srgb,var(--good) 18%,transparent)}.diff .del{background:color-mix(in srgb,var(--bad) 18%,transparent);text-decoration:line-through}
+.diff .ctx{color:var(--muted)}.diff .gap{color:var(--muted);font-style:italic;padding:4px 0}
+.toastui-editor-defaultUI{border:0!important}
 @media (max-width:760px){.wrap{grid-template-columns:1fr}nav{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}
   main{padding:20px 16px}.cols,.stats{grid-template-columns:1fr 1fr}}
 @media (max-width:480px){.cols,.stats{grid-template-columns:1fr}}
@@ -83,7 +89,7 @@ details summary{cursor:pointer}
 </nav>
 <main id="main"></main>
 </div>
-<div id="viewer" onclick="if(event.target===this)closeView()"><div class="box"><div class="hd"><div class="grow"><b id="vt"></b><div class="muted mono" id="vp"></div></div><button id="vback" onclick="back()" style="display:none">← Back</button><button id="vsrc" onclick="toggleSrc()">Show source</button><button onclick="closeView()">Close</button></div><div id="vb" style="flex:1;display:flex;min-height:0"></div></div></div>
+<div id="viewer" onclick="if(event.target===this)closeView()"><div class="box"><div class="hd"><div class="grow"><b id="vt"></b><div class="muted mono" id="vp"></div></div><button id="vback" onclick="back()" style="display:none">← Back</button><button id="vedit" onclick="startEdit()" style="display:none">Edit</button><span id="vedbtns" style="display:none" class="row"><button onclick="cancelEdit()">Cancel</button><button class="primary" onclick="reviewEdit()">Review and save</button></span><button id="vsrc" onclick="toggleSrc()">Show source</button><button onclick="closeView()">Close</button></div><div id="vb" style="flex:1;display:flex;min-height:0"></div></div></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script>
 const STEPS=[
@@ -263,7 +269,7 @@ async function view(path,keep){
   try{const f=await api('/api/file?path='+encodeURIComponent(path));if(keep&&VF)VH.push(VF.path);else VH=[];VF=f;VF.src=false;drawView();$('#viewer').classList.add('on')}catch(e){alert(e.message)}
 }
 async function back(){const p=VH.pop();if(!p)return;const rest=VH.slice();await view(p);VH=rest;$('#vback').style.display=VH.length?'':'none'}
-function closeView(){$('#viewer').classList.remove('on');$('#vb').innerHTML='';VH=[]}
+function closeView(){if(ED&&ED.dirty()&&!confirm('Discard your unsaved changes?'))return;ED=null;$('#viewer').classList.remove('on');$('#vb').innerHTML='';VH=[]}
 function toggleSrc(){VF.src=!VF.src;drawView()}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeView()});
 function splitFM(t){const m=t.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);if(!m)return[[],t];const rows=[];let k=null;
@@ -271,7 +277,7 @@ function splitFM(t){const m=t.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);if(!m)retu
   return[rows,t.slice(m[0].length)]}
 function drawView(){
   const name=VF.label.split('/').pop();$('#vt').textContent=name;$('#vp').textContent=VF.label;
-  $('#vsrc').textContent=VF.src?'Formatted':'Show source';$('#vback').style.display=VH.length?'':'none';
+  $('#vsrc').textContent=VF.src?'Formatted':'Show source';$('#vback').style.display=VH.length?'':'none';$('#vedit').style.display=VF.editable?'':'none';$('#vsrc').style.display='';$('#vedbtns').style.display='none';
   const isMd=/\.(md|markdown)$/i.test(name);
   if(VF.src||!isMd||!window.marked){$('#vb').innerHTML=`<pre class="mono">${esc(VF.text)}</pre>`;return}
   const[fm,body]=splitFM(VF.text);
@@ -291,6 +297,71 @@ function drawView(){
   // allow-same-origin without allow-scripts: nothing in the file can run, but this page can wire up its links.
   $('#vb').innerHTML='';const f=document.createElement('iframe');f.setAttribute('sandbox','allow-same-origin allow-popups allow-popups-to-escape-sandbox');f.srcdoc=html;$('#vb').appendChild(f);
   f.onload=()=>wireLinks(f.contentDocument,VF.path);
+}
+// ---- editing ----
+let ED=null;
+let EditorCls=null;
+async function loadEditorLib(){
+  if(EditorCls)return;
+  const dark=matchMedia('(prefers-color-scheme: dark)').matches;
+  for(const h of ['https://cdn.jsdelivr.net/npm/@toast-ui/editor@3.2.2/dist/toastui-editor.min.css'].concat(dark?['https://cdn.jsdelivr.net/npm/@toast-ui/editor@3.2.2/dist/theme/toastui-editor-dark.css']:[])){
+    const l=document.createElement('link');l.rel='stylesheet';l.href=h;document.head.appendChild(l)}
+  try{EditorCls=(await import('https://cdn.jsdelivr.net/npm/@toast-ui/editor@3.2.2/+esm')).Editor}
+  catch(e){throw new Error('Could not load the editor (are you offline?)')}
+}
+// Split frontmatter into editable one-line fields and blocks kept exactly as written.
+function fmBlocks(t){const m=t.match(/^---[ \t]*\n([\s\S]*?)\n(---[ \t]*(?:\n|$))/);if(!m)return{blocks:null,body:t};FMCLOSE=m[2];
+  const blocks=[];m[1].split('\n').forEach(l=>{const mm=l.match(/^([\w-]+):(.*)$/);
+    if(mm)blocks.push({key:mm[1],lines:[l],val:mm[2].trim()});else if(blocks.length)blocks[blocks.length-1].lines.push(l);else blocks.push({key:null,lines:[l]})});
+  blocks.forEach(b=>{b.simple=b.key&&b.lines.length==1&&!/^[>|]/.test(b.val);if(b.simple){const q=b.val.match(/^(["'])(.*)\1$/);b.quote=q?q[1]:'';b.val=q?q[2]:b.val}});
+  return{blocks,body:t.slice(m[0].length)}}
+let FMCLOSE='---\n';
+function fmJoin(blocks){return'---\n'+blocks.map(b=>b.simple?`${b.key}: ${b.quote}${b.val}${b.quote}`:b.lines.join('\n')).join('\n')+'\n'+FMCLOSE}
+async function startEdit(){
+  try{await loadEditorLib()}catch(e){alert(e.message);return}
+  const{blocks,body}=fmBlocks(VF.text);
+  $('#vedit').style.display='none';$('#vsrc').style.display='none';$('#vback').style.display='none';$('#vedbtns').style.display='';
+  $('#vb').style.flexDirection='column';
+  $('#vb').innerHTML=(blocks?`<div class="fmrow">${blocks.map((b,i)=>b.simple?`<div class="k">${esc(b.key)}</div><input type="text" data-i="${i}" value="${esc(b.val)}">`:`<div class="k">${esc(b.key||'')}</div><div class="raw">${esc(b.lines.slice(b.key?1:0).join('\n').trim()||b.lines[0])}</div>`).join('')}</div>`:'')+'<div id="ed" style="flex:1;min-height:0"></div>';
+  // Obsidian [[wiki links]] would be escaped by the editor; carry them through as plain text and restore on save.
+  const dark=matchMedia('(prefers-color-scheme: dark)').matches;
+  const editor=new EditorCls({el:$('#ed'),height:'100%',initialEditType:'wysiwyg',previewStyle:'tab',initialValue:body,usageStatistics:false,theme:dark?'dark':'light',
+    toolbarItems:[['heading','bold','italic','strike'],['hr','quote'],['ul','ol','task'],['table','link'],['code','codeblock']]});
+  const start=editor.getMarkdown();
+  ED={editor,blocks,body,start,dirty:()=>editor.getMarkdown()!==start||[...document.querySelectorAll('.fmrow input')].some(x=>x.value!==blocks[+x.dataset.i].val)};
+}
+function editedText(){
+  const b=ED.blocks?ED.blocks.map(x=>({...x})):null;
+  if(b)document.querySelectorAll('.fmrow input').forEach(x=>{b[+x.dataset.i].val=x.value});
+  let md=ED.editor.getMarkdown();
+  // Untouched body: keep the original bytes so the editor's reformatting never sneaks into the file.
+  md=md===ED.start?ED.body:md.replace(/\\\[\\\[/g,'[[').replace(/\\\]\\\]/g,']]');
+  if(md!==ED.body)md=ED.body.match(/^\s*/)[0]+md.replace(/^\s+/,'');
+  if(md&&!md.endsWith('\n'))md+='\n';
+  return(b?fmJoin(b):'')+md;
+}
+function cancelEdit(){if(ED&&ED.dirty()&&!confirm('Discard your changes?'))return;ED=null;$('#vb').style.flexDirection='';drawView()}
+function lineDiff(a,b){a=a.split('\n');b=b.split('\n');const n=a.length,m=b.length;
+  if(n*m>4e6)return[{t:'gap',s:'(file too large to compare line by line)'}];
+  const L=Array.from({length:n+1},()=>new Uint32Array(m+1));
+  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)L[i][j]=a[i]===b[j]?L[i+1][j+1]+1:Math.max(L[i+1][j],L[i][j+1]);
+  const out=[];let i=0,j=0;while(i<n||j<m){if(i<n&&j<m&&a[i]===b[j]){out.push({t:'ctx',s:a[i]});i++;j++}else if(j<m&&(i>=n||L[i][j+1]>=L[i+1][j])){out.push({t:'add',s:b[j]});j++}else{out.push({t:'del',s:a[i]});i++}}
+  // keep 2 lines of context around changes
+  const keep=out.map((x,k)=>x.t!=='ctx'||out.slice(Math.max(0,k-2),k+3).some(y=>y.t!=='ctx'));const res=[];let skipped=0;
+  out.forEach((x,k)=>{if(keep[k]){if(skipped){res.push({t:'gap',s:`… ${skipped} unchanged line${skipped>1?'s':''} …`});skipped=0}res.push(x)}else skipped++});
+  if(skipped)res.push({t:'gap',s:`… ${skipped} unchanged line${skipped>1?'s':''} …`});return res}
+function reviewEdit(){
+  const next=editedText();
+  if(next===VF.text){alert('No changes to save.');return}
+  const d=lineDiff(VF.text,next);
+  const host=document.createElement('div');host.id='review';host.style.cssText='position:absolute;inset:0;background:var(--panel);display:flex;flex-direction:column;z-index:2';
+  host.innerHTML=`<div class="row" style="padding:12px 16px;border-bottom:1px solid var(--line)"><b class="grow">Review changes to ${esc(VF.label.split('/').pop())}</b><button onclick="this.closest('#review').remove()">Keep editing</button><button class="primary" id="dosave">Save</button></div>
+   <div class="muted" style="padding:8px 16px 0">Green lines are added, struck-through lines removed. The current version is backed up before saving.</div>
+   <div class="diff">${d.map(x=>`<div class="${x.t}">${x.t=='add'?'+ ':x.t=='del'?'− ':x.t=='ctx'?'  ':''}${esc(x.s)||'&nbsp;'}</div>`).join('')}</div>`;
+  const box=$('#viewer .box');box.style.position='relative';box.appendChild(host);
+  $('#dosave').onclick=async()=>{try{const r=await api('/api/save',{path:VF.path,text:next,mtime:VF.mtime});host.remove();ED=null;$('#vb').style.flexDirection='';
+    await view(VF.path,false);const n=document.createElement('div');n.className='muted';n.style.cssText='padding:6px 16px;border-bottom:1px solid var(--line)';n.innerHTML=`<span class="ok">Saved.</span> Previous version backed up to <span class="mono">${esc(r.backup)}</span>`;$('#vb').before(n);setTimeout(()=>n.remove(),8000)}
+    catch(e){alert(e.message)}};
 }
 async function wireLinks(doc,from){
   const as=[...doc.querySelectorAll('a')].filter(a=>a.dataset.wiki||(a.getAttribute('href')&&!/^([a-z]+:|#|\/\/)/i.test(a.getAttribute('href'))));
