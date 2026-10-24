@@ -851,7 +851,41 @@ def dashboard():
             outside.append({"type": "agent", "name": os.path.basename(ag)[:-3], "path": ag})
     synced = sorted({os.path.basename(os.path.dirname(p)) for p in glob.glob(os.path.join(CLAUDE_DIR, "skills", "synced", "*", "*", "SKILL.md"))})
     return {"candidates": cands, "runs": runs, "outside": outside, "synced": synced,
-            "claude_dir": CLAUDE_DIR.replace(HOME, "~")}
+            "claude_dir": CLAUDE_DIR.replace(HOME, "~"), "fixes": fixes_status()}
+
+
+FIX_TYPES = {"edit_file", "create_claude_md", "save_memory", "ask_claude"}
+
+
+def fixes_status():
+    """Fixes = repairs to the existing setup: live mechanical issues plus fix-type suggestions, counted once."""
+    live = inventory()["issues"]  # cheap and local, so always current
+    files = sorted(glob.glob(os.path.join(CHECKS, "*", "check.json")), reverse=True)
+    chk = jload(files[0], None) if files else None
+    ops = (chk or {}).get("report", {}).get("opportunities", [])
+
+    def target(o):
+        a = o.get("action") or {}
+        return a.get("path") or a.get("folder") or ""
+    fix_ops = [(i, o) for i, o in enumerate(ops) if (o.get("action") or {}).get("type") in FIX_TYPES]
+    covered = {target(o) for _, o in fix_ops if target(o)}
+    open_items, done_items = [], []
+    for i, o in fix_ops:
+        item = {"kind": "suggestion", "index": i, "title": o.get("title"), "impact": o.get("impact"), "path": target(o)}
+        if o.get("state") == "done":
+            done_items.append(item)
+        elif o.get("state") == "open":
+            open_items.append(item)
+    for x in live:
+        if x["path"] not in covered:
+            open_items.append({"kind": "issue", "title": x["title"], "detail": x["detail"], "severity": x["severity"], "path": x["path"]})
+    if chk:
+        live_titles = {x["title"] for x in live}
+        done_titles = {d["title"] for d in done_items}
+        for x in chk["inventory"]["issues"]:
+            if x["title"] not in live_titles and x["title"] not in done_titles and x["path"] not in covered:
+                done_items.append({"kind": "issue", "title": x["title"], "detail": "Resolved since the check on %s." % chk["id"][:8], "path": x["path"]})
+    return {"open": open_items, "done": done_items, "live_issues": live}
 
 
 # ---------- step 6: adopt / share ----------
