@@ -24,6 +24,7 @@ HOME = os.path.expanduser("~")
 APP = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get("CAPLAB_DATA") or os.path.join(APP, "data")
 PACKS = os.path.join(APP, "packs")
+CLAUDE_DIR = os.environ.get("CAPLAB_CLAUDE_DIR") or os.path.join(HOME, ".claude")  # where Install puts things
 PORT = int(os.environ.get("PORT", "8765"))
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build"}
 CODE_EXT = {".py", ".sh", ".js", ".ts", ".rb", ".go", ".mjs", ".cjs", ".bash", ".zsh"}
@@ -351,7 +352,8 @@ def build_candidate(body):
             rules.append(read_text(p, 60_000))
     open(os.path.join(cdir, "rules.md"), "w").write("\n\n".join(rules))
     cmeta = {"id": cid, "name": name, "source": meta["source"], "items": chosen,
-             "skills": skills, "agents": agents, "has_rules": bool(rules), "created": time.strftime("%Y-%m-%d %H:%M")}
+             "skills": skills, "agents": agents, "has_rules": bool(rules), "created": time.strftime("%Y-%m-%d %H:%M"),
+             "status": "testing", "history": [{"status": "testing", "at": time.strftime("%Y-%m-%d %H:%M")}]}
     jsave(os.path.join(cdir, "meta.json"), cmeta)
     return cmeta
 
@@ -448,6 +450,7 @@ def list_candidates():
     out = []
     for m in sorted(glob.glob(os.path.join(DATA, "candidates", "*", "meta.json")), key=os.path.getmtime, reverse=True):
         c = jload(m, {})
+        c.setdefault("status", "testing")
         cdir = os.path.dirname(m)
         files = sorted(glob.glob(os.path.join(cdir, "plugin", "**", "*.md"), recursive=True))
         if read_text(os.path.join(cdir, "rules.md")).strip():
@@ -710,11 +713,11 @@ def summarize(results, judgments, cand):
     if not judgments:
         verdict = "No comparisons completed."
     elif net >= 0.25:
-        verdict = "Adopt: the new capability made answers better more often than worse."
+        verdict = "Worth installing: answers were better with it more often than without."
     elif net <= -0.25:
-        verdict = "Don't adopt: your current setup did better."
+        verdict = "Better to reject: your current setup did better without it."
     else:
-        verdict = "No clear difference. Try different tasks, or skip it."
+        verdict = "No clear difference. Try different tasks, or reject it."
     trigger_note = ""
     if cand.get("skills") or cand.get("agents"):
         trigger_note = "%d of %d runs actually used it." % (trig, len(w))
@@ -820,6 +823,17 @@ def list_runs():
 
 # ---------- step 6: adopt / share ----------
 
+def set_status(cand, status, **extra):
+    cand["status"] = status
+    cand.setdefault("history", []).append({"status": status, "at": time.strftime("%Y-%m-%d %H:%M"),
+                                           **({"run_id": extra["run_id"]} if extra.get("run_id") else {})})
+    for k, v in extra.items():
+        if k != "run_id":
+            cand[k] = v
+    cand["decided"] = time.strftime("%Y-%m-%d %H:%M")
+    jsave(os.path.join(DATA, "candidates", cand["id"], "meta.json"), cand)
+
+
 def adopt(body):
     cid = body["candidate_id"]
     cdir = os.path.join(DATA, "candidates", cid)
@@ -844,23 +858,40 @@ def adopt(body):
                        "to ~/.claude/skills/.\nTest results (if any) are in test-results/.\n" % (cand["name"], cand["source"]))
         return {"ok": True, "path": zp}
     if body.get("mode") == "install":
-        done = []
+        if cand.get("status") == "installed":
+            raise ValueError("Already installed.")
         plug = os.path.join(cdir, "plugin")
+        plan = []
         for sk in glob.glob(os.path.join(plug, "skills", "*")):
-            dest = os.path.join(HOME, ".claude", "skills", os.path.basename(sk))
-            if os.path.exists(dest):
-                raise ValueError("A skill named %s already exists in ~/.claude/skills" % os.path.basename(sk))
-            shutil.copytree(sk, dest)
-            done.append(dest.replace(HOME, "~"))
+            plan.append((sk, os.path.join(CLAUDE_DIR, "skills", os.path.basename(sk)), "dir"))
         for ag in glob.glob(os.path.join(plug, "agents", "*.md")):
-            dest = os.path.join(HOME, ".claude", "agents", os.path.basename(ag))
-            if os.path.exists(dest):
-                raise ValueError("An agent file %s already exists" % os.path.basename(ag))
+            plan.append((ag, os.path.join(CLAUDE_DIR, "agents", os.path.basename(ag)), "file"))
+        clash = [d for _, d, _ in plan if os.path.exists(d)]
+        if clash:  # check everything before copying anything, so a clash never leaves a half install
+            raise ValueError("Already exists, so nothing was installed: " + ", ".join(c.replace(HOME, "~") for c in clash))
+        done = []
+        for src, dest, kind in plan:
             os.makedirs(os.path.dirname(dest), exist_ok=True)
-            shutil.copy(ag, dest)
-            done.append(dest.replace(HOME, "~"))
+            (shutil.copytree if kind == "dir" else shutil.copy)(src, dest)
+            done.append(dest)
         rules = read_text(os.path.join(cdir, "rules.md"))
-        return {"ok": True, "installed": done, "rules_to_copy": rules}
+        set_status(cand, "installed", run_id=body.get("run_id"), installed_paths=done)
+        return {"ok": True, "installed": [d.replace(HOME, "~") for d in done], "rules_to_copy": rules, "candidate": cand}
+    if body.get("mode") == "uninstall":
+        removed = []
+        for d in cand.get("installed_paths", []):
+            # Only remove what this app installed, and only inside ~/.claude/skills or ~/.claude/agents.
+            ok_root = any(d.startswith(os.path.join(CLAUDE_DIR, x) + os.sep) for x in ("skills", "agents"))
+            if ok_root and os.path.lexists(d):
+                (shutil.rmtree if os.path.isdir(d) else os.remove)(d)
+                removed.append(d.replace(HOME, "~"))
+        set_status(cand, "uninstalled", installed_paths=[])
+        return {"ok": True, "removed": removed, "candidate": cand}
+    if body.get("mode") in ("reject", "reconsider"):
+        if cand.get("status") == "installed":
+            raise ValueError("Uninstall it first.")
+        set_status(cand, "rejected" if body["mode"] == "reject" else "testing", run_id=body.get("run_id"))
+        return {"ok": True, "candidate": cand}
     raise ValueError("Unknown mode")
 
 

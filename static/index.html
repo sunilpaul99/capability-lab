@@ -65,6 +65,7 @@ table.tests th{text-align:left;color:var(--muted);font-weight:500;font-size:12px
 table.tests td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
 table.tests tbody tr{cursor:pointer}table.tests tbody tr:hover{background:var(--soft)}
 @media (max-width:600px){table.tests th:last-child,table.tests td:last-child{display:none}}
+.tag.st-good{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent)}.tag.st-bad{color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,transparent)}.tag.st-warn{color:var(--warn)}
 .help{font-size:13.5px;color:var(--ink);background:var(--bg);border-radius:8px;padding:2px 12px;margin:0 0 10px}.help p{margin:8px 0}
 .item.nested{margin-left:26px!important;padding-left:12px;border-left:2px solid var(--line)}
 .open{color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
@@ -183,16 +184,18 @@ async function saveSetup(){const selected=[...document.querySelectorAll('.sp:che
 
 V.add=async()=>{
   [S.cands,S.cat]=await Promise.all([api('/api/candidates'),S.cat?Promise.resolve(S.cat):api('/api/catalog')]);S.done.add=!!S.cands.length;
-  const haveNames=new Set(S.cands.map(c=>c.name));const groupsC=[...new Set(S.cat.map(c=>c.group))];
+  const latest={};S.cands.forEach(c=>{if(!latest[c.name])latest[c.name]=c});const groupsC=[...new Set(S.cat.map(c=>c.group))];
   const mode=S.addMode||'git';
   $('#main').innerHTML=`<h2>3. Add a new capability</h2>
   <p class="lead">Bring in a skill, agent, or set of rules you want to try. Point at a GitHub repo, a folder, or paste the text. The lab finds the usable pieces; nothing runs yet.</p>
-  <div class="card"><h3>Ready to try</h3><p class="muted" style="margin-top:0">Picked for your work. <b>Try it</b> downloads the capability and adds a few matching Bell AI test tasks to step 4.</p>
+  <div class="card"><h3>Ready to try</h3><p class="muted" style="margin-top:0">Picked for your work. <b>Try it</b> downloads the capability for testing and adds matching Bell AI test tasks to step 4. Nothing changes in your Claude until you choose <b>Install</b>.</p>
    ${groupsC.map(g=>`<div style="margin-top:14px"><div class="muted" style="font-weight:600;text-transform:uppercase;font-size:11.5px;letter-spacing:.04em">${esc(g)}</div>
     ${S.cat.filter(c=>c.group==g).map(c=>`<div class="item"><div class="grow"><b>${esc(c.title)}</b> <span class="tag">${esc(c.kind)}</span> <span class="muted">by ${esc(c.by)}</span>
       <div>${esc(c.what)}</div><div class="muted">Good for: ${esc(c.good_for)}${c.note?` <span style="color:var(--warn)">${esc(c.note)}</span>`:''}</div>
       <div class="muted"><a href="${esc(c.link)}" target="_blank" rel="noopener" style="color:inherit">View on GitHub</a> · ${c.tasks.length} test task${c.tasks.length>1?'s':''}</div></div>
-      ${haveNames.has(c.id)?'<span class="ok" style="white-space:nowrap">Added ✓</span>':`<button class="primary" onclick="quickAdd('${esc(c.id)}',this)">Try it</button>`}</div>`).join('')}</div>`).join('')}
+      ${(()=>{const k=latest[c.id],st=k&&k.status;
+        if(st=='installed'||st=='testing')return statusTag(st);
+        return `<div style="text-align:right">${st?statusTag(st)+'<br>':''}<button class="primary" style="margin-top:4px" onclick="quickAdd('${esc(c.id)}',this)">${st?'Test again':'Try it'}</button></div>`})()}</div>`).join('')}</div>`).join('')}
   </div>
   <div class="card"><h3>Or bring your own</h3><div class="tabs">${[['git','From GitHub'],['folder','From a folder'],['text','Paste text']].map(([k,t])=>`<button class="${mode==k?'on':''}" onclick="S.addMode='${k}';render()">${t}</button>`).join('')}</div>
   ${mode=='git'?`<label>Repository or folder link</label><input type="text" id="val" placeholder="e.g. https://github.com/anthropics/skills/tree/main/skills/brand-guidelines">
@@ -203,7 +206,8 @@ V.add=async()=>{
      <label>Instructions</label><textarea id="val" style="min-height:160px" placeholder="Paste the SKILL.md, agent definition, or rules here"></textarea>`:''}
   <div class="row" style="margin-top:12px"><button class="primary" id="scanb" onclick="doImport('${mode}')">Find capabilities</button><span id="ist" class="muted"></span></div></div>
   <div id="found"></div>
-  ${S.cands.length?`<div class="card"><h3>Ready to test</h3>${S.cands.map(c=>`<label class="item" style="margin:0;color:var(--ink)"><input type="radio" name="cand" value="${esc(c.id)}" ${S.cand==c.id?'checked':''} onchange="S.cand=this.value;save()"><div class="grow"><b>${esc(c.name)}</b> ${c.skills.map(s=>`<span class="tag">skill: ${esc(s)}</span>`).join(' ')} ${c.agents.map(s=>`<span class="tag">agent: ${esc(s)}</span>`).join(' ')} ${c.has_rules?'<span class="tag">rules</span>':''}<div class="muted">${esc(c.source)} · ${esc(c.created)}</div><div class="muted">Read: ${(c.files||[]).map(f=>`<span class="open" onclick="event.preventDefault();view(${esc(JSON.stringify(f.path))})">${esc(f.label)}</span>`).join(' · ')}</div></div></label>`).join('')}</div>`:''}
+  ${S.cands.length?`<div class="card"><h3>Your capabilities</h3><p class="muted" style="margin-top:0">Pick one to test in step 5. When you've seen the results, install it or reject it.</p>${S.cands.map(c=>`<label class="item" style="margin:0;color:var(--ink)"><input type="radio" name="cand" value="${esc(c.id)}" ${S.cand==c.id?'checked':''} onchange="S.cand=this.value;save()"><div class="grow"><b>${esc(c.name)}</b> ${statusTag(c.status)} ${c.skills.map(s=>`<span class="tag">skill: ${esc(s)}</span>`).join(' ')} ${c.agents.map(s=>`<span class="tag">agent: ${esc(s)}</span>`).join(' ')} ${c.has_rules?'<span class="tag">rules</span>':''}<div class="muted">${esc(c.source)} · added for testing ${esc(c.created)}${c.status!='testing'&&c.decided?` · ${esc(STATUS[c.status].past)} ${esc(c.decided)}`:''}</div><div class="muted">Read: ${(c.files||[]).map(f=>`<span class="open" onclick="event.preventDefault();view(${esc(JSON.stringify(f.path))})">${esc(f.label)}</span>`).join(' · ')}</div></div>
+   <div class="row" style="flex-wrap:nowrap" onclick="event.preventDefault()">${decisionButtons(c)}</div></label>`).join('')}</div>`:''}
   ${S.cands.length?nextBtn():''}`;
   if(S.imp)showFound(S.imp);
 };
@@ -223,7 +227,7 @@ function showFound(m){
 }
 async function quickAdd(id,btn){btn.disabled=true;btn.textContent='Adding…';
   try{const r=await api('/api/quick',{id});S.cand=r.candidate.id;save();await render();
-    const n=document.createElement('div');n.className='card';n.innerHTML=`<span class="ok">Added ${esc(r.candidate.name)}.</span> ${r.tasks_added} test task${r.tasks_added==1?'':'s'} added to step 4. Add more, or click Next.`;$('#main h2').after(n)}
+    const n=document.createElement('div');n.className='card';n.innerHTML=`<b>Now testing ${esc(r.candidate.name)}.</b> ${r.tasks_added} test task${r.tasks_added==1?'':'s'} added to step 4. Nothing is installed until you decide. Add more, or click Next.`;$('#main h2').after(n)}
   catch(e){btn.disabled=false;btn.textContent='Try it';alert(e.message)}}
 async function makeCand(){const selected=[...document.querySelectorAll('.fi:checked')].map(x=>x.value);try{const c=await api('/api/candidate',{import_id:S.imp.id,selected,name:$('#cname').value});S.cand=c.id;S.imp=null;save();render()}catch(e){alert(e.message)}}
 
@@ -254,7 +258,7 @@ V.run=async()=>{
   const on=tasks.filter(t=>t.enabled!==false);const cand=cands.find(c=>c.id==S.cand)||cands[0];
   $('#main').innerHTML=`<h2>5. Run the comparison</h2>
   <p class="lead">Each task runs in an empty scratch folder with no shell, web, or connectors, so nothing an imported capability does can touch your files. A separate Claude then reads both answers blind and picks the better one.</p>
-  <div class="card"><label>Capability to test</label><select id="rc">${cands.map(c=>`<option value="${esc(c.id)}" ${cand&&c.id==cand.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+  <div class="card"><label>Capability to test</label><select id="rc">${cands.map(c=>`<option value="${esc(c.id)}" ${cand&&c.id==cand.id?'selected':''}>${esc(c.name)} (${esc(STATUS[c.status||'testing'].label.toLowerCase())})</option>`).join('')}</select>
    <div class="row"><div class="grow"><label>Runs per task (more = steadier result)</label><select id="rr"><option>1</option><option selected>2</option><option>3</option></select></div>
    <div class="grow"><label>Model</label><select id="rm"><option value="">Default</option><option value="sonnet">Sonnet</option><option value="opus">Opus</option><option value="haiku">Haiku (cheap)</option></select></div>
    <div class="grow"><label>Spending cap per run (USD)</label><input type="number" id="rb" value="1" step="0.25" min="0.1"></div></div>
@@ -296,6 +300,7 @@ V.results=async()=>{
      <td class="mono" style="white-space:nowrap">$${((x.b&&x.b.cost)||0).toFixed(3)} / $${((x.w&&x.w.cost)||0).toFixed(3)}</td></tr>`).join('')}
    </tbody></table><p class="muted" style="margin-bottom:0">Click a row to compare its two answers.</p></div>
   <div class="card"><div class="verdict">${esc(s.verdict)}</div><div class="muted">${esc(s.trigger)} ${s.errors?`<span class="err">${s.errors} run(s) had errors.</span>`:''}</div></div>
+  <div class="card" id="decide"></div>
   <div class="stats">
    <div class="stat"><div class="big win">${s.wins}</div><div class="muted">better with it</div></div>
    <div class="stat"><div class="big loss">${s.losses}</div><div class="muted">better without it</div></div>
@@ -306,19 +311,41 @@ V.results=async()=>{
   ${tasks.map(t=>r.judgments.filter(j=>j.task_id==t.id).map(j=>{const b=by(t.id,'baseline',j.rep),w=by(t.id,'with',j.rep);return `<div class="card" id="test-${t.id}-${j.rep}"><div class="row"><b class="grow">${esc(t.prompt.slice(0,160))}</b><span class="tag ${j.winner=='with'?'':j.winner=='baseline'?'bad':'warn'}">${j.winner=='with'?'better with it':j.winner=='baseline'?'better without':'tie'}</span></div>
    <p class="muted">${esc(j.reason)}${w&&w.used_capability.length?` · used: ${esc(w.used_capability.join(', '))}`:''}</p>
    <details><summary class="muted">Compare the two answers</summary><div class="cols"><div><b>Without</b>${(j.issues_baseline||[]).length?`<div class="muted err">${esc(j.issues_baseline.join('; '))}</div>`:''}<pre>${esc(ans(b))}</pre></div><div><b>With ${esc(cand.name)}</b>${(j.issues_with||[]).length?`<div class="muted err">${esc(j.issues_with.join('; '))}</div>`:''}<pre>${esc(ans(w))}</pre></div></div></details></div>`}).join('')).join('')}
-  <div class="card"><h3>Decide</h3><p class="muted">Install copies the skills and agents into your Claude Code folder (~/.claude) so every session can use them. Share makes a zip with the capability and these results, for Fellows or anyone else.</p>
-   <div class="row"><button class="primary" onclick="adopt('install')">Install for me</button><button onclick="adopt('pack')">Make a shareable pack</button><button onclick="go(2)">Try something else</button></div><div id="ad" style="margin-top:10px"></div></div>`;
+`;
+  drawDecide(cand.id);
 };
+async function drawDecide(cid){
+  const c=(await api('/api/candidates')).find(x=>x.id==cid);const box=$('#decide');if(!c||!box)return;
+  const st=c.status||'testing';
+  const head={testing:`<h3>Your decision</h3><p>You're still <b>testing</b> ${esc(c.name)}. Nothing has changed in your Claude yet.</p>`,
+    installed:`<h3>Installed ✓</h3><p>You installed ${esc(c.name)} on ${esc(c.decided)}. Every Claude Code session can now use it.</p>`,
+    rejected:`<h3>Rejected</h3><p>You rejected ${esc(c.name)} on ${esc(c.decided)}. Nothing was installed.</p>`,
+    uninstalled:`<h3>Uninstalled</h3><p>You installed ${esc(c.name)}, then removed it on ${esc(c.decided)}.</p>`}[st];
+  box.innerHTML=`${head}<div class="row">${decisionButtons(c,true)}<button onclick="pack('${esc(c.id)}')">Make a shareable pack</button><button onclick="go(2)">Try something else</button></div><div id="ad" style="margin-top:10px"></div>`;
+}
 function openTest(tid,rep){const c=document.getElementById(`test-${tid}-${rep}`);if(!c)return;const d=c.querySelector('details');if(d)d.open=true;
   c.scrollIntoView({behavior:'smooth',block:'start'});c.style.outline='2px solid var(--accent)';setTimeout(()=>c.style.outline='',1600)}
 function ans(x){if(!x)return'(missing)';let s=x.output||'';for(const[k,v]of Object.entries(x.files||{}))s+=`\n\n[file: ${k}]\n${v}`;if(x.error)s+=`\n\n[error: ${x.error}]`;return s}
-async function adopt(mode){
-  if(mode=='install'&&!confirm('Copy this capability into ~/.claude so all your Claude Code sessions can use it?'))return;
-  try{const r=await api('/api/adopt',{candidate_id:(await api('/api/run/'+S.runId)).config.candidate.id,mode,run_id:S.runId});
-   $('#ad').innerHTML=mode=='pack'?`<span class="ok">Pack saved:</span> <span class="mono">${esc(r.path)}</span> <button onclick="api('/api/open',{path:'${esc(r.path)}'})">Show in Finder</button>`:
-    `<span class="ok">Installed.</span> <span class="muted mono">${esc(r.installed.join(', ')||'(no skills or agents)')}</span>${r.rules_to_copy?`<p class="muted">Rules aren't installed automatically. Add this to your memory or CLAUDE.md if you want it always on:</p><pre>${esc(r.rules_to_copy)}</pre>`:''}`}
-  catch(e){$('#ad').innerHTML=`<span class="err">${esc(e.message)}</span>`}
+const STATUS={testing:{label:'Testing',past:'testing since',cls:''},installed:{label:'Installed',past:'installed',cls:'good'},
+  rejected:{label:'Rejected',past:'rejected',cls:'bad'},uninstalled:{label:'Uninstalled',past:'uninstalled',cls:'warn'}};
+function statusTag(st){const x=STATUS[st||'testing'];return `<span class="tag st-${x.cls||'testing'}">${st=='installed'?'Installed ✓':x.label}</span>`}
+function decisionButtons(c,big){const id=esc(c.id),st=c.status||'testing';
+  if(st=='testing')return `<button class="${big?'primary':''}" onclick="decide('${id}','install')">Install</button><button onclick="decide('${id}','reject')">Reject</button>`;
+  if(st=='installed')return `<button onclick="decide('${id}','uninstall')">Uninstall</button>`;
+  return `<button onclick="decide('${id}','reconsider')">Test again</button>`}
+async function decide(cid,mode){
+  const msg={install:'Install this capability? It will be copied into ~/.claude so every Claude Code session can use it.',
+    uninstall:'Uninstall? This removes the files the lab installed from ~/.claude.',reject:null,reconsider:null}[mode];
+  if(msg&&!confirm(msg))return;
+  try{const r=await api('/api/adopt',{candidate_id:cid,mode,run_id:S.runId});
+    if(STEPS[S.step].k=='results'){await drawDecide(cid);
+      if(mode=='install')$('#ad').innerHTML=`<span class="muted">Copied to <span class="mono">${esc(r.installed.join(', ')||'(no skills or agents)')}</span></span>${r.rules_to_copy?`<p class="muted">Rules aren't installed automatically. To keep them on, ask Claude to remember them, or add this to your CLAUDE.md:</p><pre>${esc(r.rules_to_copy)}</pre>`:''}`;
+      if(mode=='uninstall')$('#ad').innerHTML=`<span class="muted">Removed <span class="mono">${esc(r.removed.join(', ')||'(nothing to remove)')}</span></span>`}
+    else render()}
+  catch(e){alert(e.message)}
 }
+async function pack(cid){try{const r=await api('/api/adopt',{candidate_id:cid,mode:'pack',run_id:S.runId});
+  $('#ad').innerHTML=`<span class="ok">Pack saved:</span> <span class="mono">${esc(r.path)}</span> <button onclick="api('/api/open',{path:${esc(JSON.stringify(r.path))}})">Show in Finder</button>`}catch(e){$('#ad').innerHTML=`<span class="err">${esc(e.message)}</span>`}}
 // ---- file viewer: formatted reading view of any config file ----
 let VF=null,VH=[];
 async function view(path,keep){
