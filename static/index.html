@@ -60,6 +60,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px s
 .bar>div{height:100%;background:var(--accent);transition:width .4s}
 .win{color:var(--good)} .loss{color:var(--bad)}
 details summary{cursor:pointer}
+.help{font-size:13.5px;color:var(--ink);background:var(--bg);border-radius:8px;padding:2px 12px;margin:0 0 10px}.help p{margin:8px 0}
 .item.nested{margin-left:26px!important;padding-left:12px;border-left:2px solid var(--line)}
 .open{color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
 .open:hover{text-decoration-color:var(--accent)}
@@ -137,16 +138,41 @@ V.setup=async()=>{
   const groups={};d.found.forEach(f=>(groups[f.kind]=groups[f.kind]||[]).push(f));
   $('#main').innerHTML=`<h2>2. Your current setup</h2>
   <p class="lead">This is the "before" in the comparison. Tick everything that shapes how Claude works for you today: memory, standing rules, voice guides. Every test runs with these, and the "after" adds the new capability on top.</p>
-  ${Object.keys(groups).map(g=>`<div class="card"><h3>${esc(g[0].toUpperCase()+g.slice(1))} <span class="muted">(${groups[g].length})</span></h3>
+  ${Object.keys(groups).sort((a,b)=>SECTION_ORDER.indexOf(a)-SECTION_ORDER.indexOf(b)).map(g=>`<div class="card"><h3>${esc(g[0].toUpperCase()+g.slice(1))} <span class="muted">(${groups[g].length})</span></h3>${helpBox(g)}
    ${groups[g].map(f=>`<label class="item ${f.role=='listed'||f.role=='unlisted'?'nested':''}" style="margin:0;color:var(--ink)"><input type="checkbox" class="sp" value="${esc(f.path)}" ${sel.has(f.path)?'checked':''}><div class="grow"><div><span class="open" onclick="event.preventDefault();view(${esc(JSON.stringify(f.path))})">${esc(f.label.split('/').pop())}</span>${f.role=='index'?' <span class="tag">index · start here</span>':''}${f.role=='unlisted'?' <span class="tag warn">not in index</span>':''}</div><div class="muted mono">${esc(f.label)} · ${Math.round(f.size/1000)} KB</div></div></label>`).join('')}</div>`).join('')||'<div class="card muted">Nothing found yet. Add a folder below.</div>'}
   ${blocked.length?`<div class="card" style="border-color:var(--warn)"><b>macOS blocked reading:</b> <span class="mono">${blocked.map(b=>esc(b.label)).join(', ')}</span><p class="muted">Start the lab by double-clicking <b>Start Capability Lab</b> in Finder (it runs from Terminal, which has access), or add files one by one below.</p></div>`:''}
-  <div class="card"><h3>Other files to include</h3><p class="muted">Paste the full path of any file Claude should treat as your standing rules, one per line. Tip: drag a file from Finder into this box.</p>
+  <div class="card"><h3>Other files to include</h3>${helpBox('other files')}
    <textarea id="extra" style="min-height:60px" class="mono">${esc((d.saved&&d.saved.extra||[]).join('\n'))}</textarea></div>
-  <div class="card"><h3>Folders to look in</h3><p class="muted">Project folders that hold instruction files or rules pages (CLAUDE.md, voice guides, procedures). One per line.</p>
+  <div class="card"><h3>Folders to look in</h3>${helpBox('folders')}
    <textarea id="roots" style="min-height:60px" class="mono">${esc(d.roots.join('\n'))}</textarea><div class="row" style="margin-top:8px"><button onclick="saveRoots()">Rescan</button></div></div>
-  <div class="card"><h3>Anything else Claude should always know</h3><textarea id="notes" placeholder="e.g. I run the Bell AI Fellowship. Plain voice, no hype words.">${esc(d.saved?d.saved.notes:'')}</textarea></div>
+  <div class="card"><h3>Anything else Claude should always know</h3>${helpBox('notes')}<textarea id="notes" placeholder="e.g. I run the Bell AI Fellowship. Plain voice, no hype words.">${esc(d.saved?d.saved.notes:'')}</textarea></div>
   <div class="next"><button onclick="go(0)">Back</button><button class="primary" onclick="saveSetup()">Save and continue →</button></div>`;
 };
+const SECTION_ORDER=['memory','instructions','rules page','added by you','skill (always loaded)','agent (always loaded)'];
+const SECTION_HELP={
+ 'memory':{what:'Notes Claude writes for itself about you: your preferences, corrections you have made, facts about your projects. MEMORY.md is the index, and Claude reads it at the start of every session in that folder. It opens the other files when they look relevant.',
+   who:'both',how:'Fix a wrong fact or reword a note yourself; that is safe. To add or remove a memory, ask Claude, because it also has to update the index and the links between notes.',
+   ask:'Remember that I prefer…  /  Forget the note about…'},
+ 'instructions':{what:'Standing instructions for a project folder. Claude reads CLAUDE.md automatically at the start of every session in that folder. Other files here, like SCHEMA.md, are read when something points Claude to them.',
+   who:'you',how:'Edit these yourself. They are plain English, and you are the best judge of how you want Claude to work. Keep them short, since Claude reads them every time.',
+   ask:'Add a rule to CLAUDE.md that…'},
+ 'rules page':{what:'Your own notes, such as a voice guide or operating procedures. Claude reads them only when a task, a memory, or an instruction file sends it there. In this lab, a ticked page is included in every test.',
+   who:'you',how:'Edit these yourself; they are your documents. Ask Claude when the update depends on evidence, such as refreshing your voice guide from recent writing.',
+   ask:'Update writing-voice.md using my last three essays'},
+ 'added by you':{what:'Files you added in the box below. The lab treats them like rules pages.',who:'you',how:'Edit freely.'},
+ 'skill (always loaded)':{what:'Skills installed for all your Claude Code sessions. Claude always sees each skill\'s one-line description and loads the full instructions when a request matches it.',
+   who:'claude',how:'Small wording fixes in the body are fine to make yourself. The description decides when the skill fires, so for changes there, ask Claude and then retest the skill here.',
+   ask:'Make my X skill also trigger for…'},
+ 'agent (always loaded)':{what:'Helper agents Claude can hand work to, each with its own instructions and tools.',
+   who:'claude',how:'Better to ask Claude, since the tool list and description need to stay consistent. Retest here after a change.',
+   ask:'Change my reviewer agent so it also checks…'},
+ 'other files':{what:'Any other file you want included as standing rules in these tests, such as a style guide that lives somewhere else. Paste one full path per line, or drag a file in from Finder.',who:'you',how:'Only this app uses this list; it changes nothing in Claude.'},
+ 'folders':{what:'Where the lab looks for instruction files and rules pages. One folder per line.',who:'you',how:'Only this app uses this list; it changes nothing in Claude.'},
+ 'notes':{what:'Extra context added to both sides of every test, such as who you are and what you care about.',who:'you',how:'Only these tests use it. To make a note permanent, ask Claude to remember it.'},
+};
+function helpBox(k){const h=SECTION_HELP[k];if(!h)return'';
+  const tag={you:'<span class="tag" style="color:var(--good)">Edit it yourself</span>',claude:'<span class="tag warn">Better to ask Claude</span>',both:'<span class="tag">Small fixes yourself · bigger changes via Claude</span>'}[h.who];
+  return `<div class="help"><p>${esc(h.what)}</p><p>${tag} ${esc(h.how)}</p>${h.ask?`<p class="muted">Example to ask Claude: <i>“${esc(h.ask)}”</i></p>`:''}</div>`}
 async function saveRoots(){await api('/api/roots',{roots:$('#roots').value.split('\n').map(s=>s.trim()).filter(Boolean)});render()}
 async function saveSetup(){const selected=[...document.querySelectorAll('.sp:checked')].map(x=>x.value);await api('/api/setup',{selected,extra:$('#extra').value.split('\n').map(x=>x.trim()).filter(Boolean),notes:$('#notes').value});S.done.setup=true;go(2)}
 
