@@ -127,6 +127,26 @@ button.big{padding:10px 18px;font-size:15px}
 .dtable td,.dtable th{padding:10px 14px}
 @media (max-width:980px){.dgrid{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(3,1fr)}}
 @media (max-width:640px){.kpis{grid-template-columns:1fr 1fr}.opcard .row{flex-direction:column}.opbtns{align-items:flex-start}}
+
+.navsec{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:18px 10px 6px}
+.step.home{font-weight:600;color:var(--ink)}
+.banner{background:color-mix(in srgb,var(--warn) 14%,var(--panel));border:1px solid var(--warn);border-radius:12px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;justify-content:space-between}
+.kpis.k3{grid-template-columns:repeat(3,1fr)}
+.kpi .s{color:var(--muted);font-size:12px;margin-top:2px}
+.todo{display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--line)}
+.todo:first-of-type{border-top:0}
+.tnum{width:26px;height:26px;border-radius:50%;background:var(--soft);color:var(--accent);display:grid;place-items:center;font-size:13px;font-weight:600;flex:none}
+.ttitle{font-weight:600}.tbody{margin-top:4px}
+.tbtns{display:flex;flex-direction:column;align-items:flex-end;gap:6px;white-space:nowrap}.tbtns>button+button{margin-top:0}
+.ttag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;margin-right:4px;vertical-align:1px;text-transform:uppercase;letter-spacing:.04em}
+.t-fix{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.t-try{background:var(--soft);color:var(--accent)}
+.t-decide{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.t-check{background:var(--accent);color:var(--accent-ink)}
+details.fold{margin-top:14px}details.fold>summary{cursor:pointer;font-weight:600;padding:8px 2px;color:var(--ink)}details.fold>.panel{margin-top:6px}
+#toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,140%);background:var(--panel);border:1px solid var(--line);box-shadow:0 8px 30px rgba(0,0,0,.25);border-radius:12px;padding:12px 16px;max-width:min(560px,calc(100vw - 32px));transition:transform .25s;z-index:20}
+#toast.on{transform:translate(-50%,0)}
+@media (max-width:640px){.kpis.k3{grid-template-columns:1fr}.todo{flex-wrap:wrap}.tbtns{align-items:flex-start;flex-direction:row;flex-wrap:wrap;width:100%;padding-left:40px}}
 @media (max-width:760px){.wrap{grid-template-columns:minmax(0,1fr)}nav{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}
   main{padding:20px 16px}.cols,.stats{grid-template-columns:1fr 1fr}}
 @media (max-width:480px){.cols,.stats{grid-template-columns:1fr}}
@@ -151,15 +171,15 @@ const STEPS=[
  {k:'tasks',t:'Pick test tasks'},
  {k:'run',t:'Run the comparison'},
  {k:'results',t:'Results and decision'},
- {k:'dashboard',t:'Dashboard'},
+ {k:'dashboard',t:'Home'},
 ];
 const S={step:0,done:{},conn:null,setup:null,cands:[],cand:null,imp:null,tasks:[],runId:null};
-try{S.step=+localStorage.getItem('cl-step')||0;S.cand=localStorage.getItem('cl-cand');S.runId=localStorage.getItem('cl-run')}catch(e){}
+try{const st=localStorage.getItem('cl-step');S.step=st===null?6:+st;S.cand=localStorage.getItem('cl-cand');S.runId=localStorage.getItem('cl-run')}catch(e){}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function api(p,b){const r=await fetch(p,b?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}:{});const j=await r.json();if(!r.ok)throw new Error(j.error||'Request failed');return j}
 function save(){try{localStorage.setItem('cl-step',S.step);S.cand&&localStorage.setItem('cl-cand',S.cand);S.runId&&localStorage.setItem('cl-run',S.runId)}catch(e){}}
-function nav(){ $('#steps').innerHTML=STEPS.map((s,i)=>`<div class="step ${i==S.step?'active':''} ${S.done[s.k]?'done':''}" onclick="go(${i})"><span class="num">${S.done[s.k]?'✓':i+1}</span>${s.t}</div>`).join('') }
+function nav(){const H=STEPS.length-1;$('#steps').innerHTML=`<div class="step home ${S.step==H?'active':''}" onclick="go(${H})"><span class="num">⌂</span>Home</div><div class="navsec">Try a capability step by step</div>`+STEPS.slice(0,H).map((s,i)=>`<div class="step ${i==S.step?'active':''} ${S.done[s.k]?'done':''}" onclick="go(${i})"><span class="num">${S.done[s.k]?'✓':i+1}</span>${s.t}</div>`).join('') }
 function go(i){S.step=i;save();render()}
 function nextBtn(label='Next'){return `<div class="next">${S.step>0?`<button onclick="go(${S.step-1})">Back</button>`:''}<button class="primary" onclick="go(${S.step+1})">${label} →</button></div>`}
 let chain=Promise.resolve();function render(){chain=chain.then(_render,_render);return chain}
@@ -234,7 +254,7 @@ V.add=async()=>{
   const mode=S.addMode||'git';
   $('#main').innerHTML=`<h2>3. Add a new capability</h2>
   <p class="lead">Bring in a skill, agent, or set of rules you want to try. Point at a GitHub repo, a folder, or paste the text. The lab finds the usable pieces; nothing runs yet.</p>
-  <div class="card"><h3>Ready to try</h3><p class="muted" style="margin-top:0">Picked for your work. <b>Try it</b> downloads the capability for testing and adds matching Bell AI test tasks to step 4. Nothing changes in your Claude until you choose <b>Install</b>.</p>
+  <div class="card"><h3>Ready to try</h3><p class="muted" style="margin-top:0">Picked for your work. <b>Try it</b> downloads the capability for testing and adds matching Bell AI test tasks to step 4. Nothing changes in your Claude until you choose <b>Keep</b>.</p>
    ${groupsC.map(g=>`<div style="margin-top:14px"><div class="muted" style="font-weight:600;text-transform:uppercase;font-size:11.5px;letter-spacing:.04em">${esc(g)}</div>
     ${S.cat.filter(c=>c.group==g).map(c=>`<div class="item"><div class="grow"><b>${esc(c.title)}</b> <span class="tag">${esc(c.kind)}</span> <span class="muted">by ${esc(c.by)}</span>
       <div>${esc(c.what)}</div><div class="muted">Good for: ${esc(c.good_for)}${c.note?` <span style="color:var(--warn)">${esc(c.note)}</span>`:''}</div>
@@ -252,7 +272,7 @@ V.add=async()=>{
      <label>Instructions</label><textarea id="val" style="min-height:160px" placeholder="Paste the SKILL.md, agent definition, or rules here"></textarea>`:''}
   <div class="row" style="margin-top:12px"><button class="primary" id="scanb" onclick="doImport('${mode}')">Find capabilities</button><span id="ist" class="muted"></span></div></div>
   <div id="found"></div>
-  ${S.cands.length?`<div class="card"><h3>Your capabilities</h3><p class="muted" style="margin-top:0">Pick one to test in step 5. When you've seen the results, install it or reject it.</p>${S.cands.map(c=>`<label class="item" style="margin:0;color:var(--ink)"><input type="radio" name="cand" value="${esc(c.id)}" ${S.cand==c.id?'checked':''} onchange="S.cand=this.value;save()"><div class="grow"><b>${esc(c.name)}</b> ${statusTag(c.status)} ${c.skills.map(s=>`<span class="tag">skill: ${esc(s)}</span>`).join(' ')} ${c.agents.map(s=>`<span class="tag">agent: ${esc(s)}</span>`).join(' ')} ${c.has_rules?'<span class="tag">rules</span>':''}<div class="muted">${esc(c.source)} · added for testing ${esc(c.created)}${c.status!='testing'&&c.decided?` · ${esc(STATUS[c.status].past)} ${esc(c.decided)}`:''}</div><div class="muted">Read: ${(c.files||[]).map(f=>`<span class="open" onclick="event.preventDefault();view(${esc(JSON.stringify(f.path))})">${esc(f.label)}</span>`).join(' · ')}</div></div>
+  ${S.cands.length?`<div class="card"><h3>Your capabilities</h3><p class="muted" style="margin-top:0">Pick one to test in step 5. When you've seen the results, keep it or skip it.</p>${S.cands.map(c=>`<label class="item" style="margin:0;color:var(--ink)"><input type="radio" name="cand" value="${esc(c.id)}" ${S.cand==c.id?'checked':''} onchange="S.cand=this.value;save()"><div class="grow"><b>${esc(c.name)}</b> ${statusTag(c.status)} ${c.skills.map(s=>`<span class="tag">skill: ${esc(s)}</span>`).join(' ')} ${c.agents.map(s=>`<span class="tag">agent: ${esc(s)}</span>`).join(' ')} ${c.has_rules?'<span class="tag">rules</span>':''}<div class="muted">${esc(c.source)} · added for testing ${esc(c.created)}${c.status!='testing'&&c.decided?` · ${esc(STATUS[c.status].past)} ${esc(c.decided)}`:''}</div><div class="muted">Read: ${(c.files||[]).map(f=>`<span class="open" onclick="event.preventDefault();view(${esc(JSON.stringify(f.path))})">${esc(f.label)}</span>`).join(' · ')}</div></div>
    <div class="row" style="flex-wrap:nowrap" onclick="event.preventDefault()">${decisionButtons(c)}</div></label>`).join('')}</div>`:''}
   ${S.cands.length?nextBtn():''}`;
   if(S.imp)showFound(S.imp);
@@ -273,7 +293,7 @@ function showFound(m){
 }
 async function quickAdd(id,btn){btn.disabled=true;btn.textContent='Adding…';
   try{const r=await api('/api/quick',{id});S.cand=r.candidate.id;save();await render();
-    const n=document.createElement('div');n.className='card';n.innerHTML=`<b>Now testing ${esc(r.candidate.name)}.</b> ${r.tasks_added} test task${r.tasks_added==1?'':'s'} added to step 4. Nothing is installed until you decide. Add more, or click Next.`;$('#main h2').after(n)}
+    const n=document.createElement('div');n.className='card';n.innerHTML=`<b>Now trying ${esc(r.candidate.name)}.</b> ${r.tasks_added} test task${r.tasks_added==1?'':'s'} added to step 4. Nothing changes in your Claude until you keep it. Add more, or click Next.`;$('#main h2').after(n)}
   catch(e){btn.disabled=false;btn.textContent='Try it';alert(e.message)}}
 async function makeCand(){const selected=[...document.querySelectorAll('.fi:checked')].map(x=>x.value);try{const c=await api('/api/candidate',{import_id:S.imp.id,selected,name:$('#cname').value});S.cand=c.id;S.imp=null;save();render()}catch(e){alert(e.message)}}
 
@@ -363,25 +383,25 @@ V.results=async()=>{
 async function drawDecide(cid){
   const c=(await api('/api/candidates')).find(x=>x.id==cid);const box=$('#decide');if(!c||!box)return;
   const st=c.status||'testing';
-  const head={testing:`<h3>Your decision</h3><p>You're still <b>testing</b> ${esc(c.name)}. Nothing has changed in your Claude yet.</p>`,
-    installed:`<h3>Installed ✓</h3><p>You installed ${esc(c.name)} on ${esc(c.decided)}. Every Claude Code session can now use it.</p>`,
-    rejected:`<h3>Rejected</h3><p>You rejected ${esc(c.name)} on ${esc(c.decided)}. Nothing was installed.</p>`,
-    uninstalled:`<h3>Uninstalled</h3><p>You installed ${esc(c.name)}, then removed it on ${esc(c.decided)}.</p>`}[st];
-  box.innerHTML=`${head}<div class="row">${decisionButtons(c,true)}<button onclick="pack('${esc(c.id)}')">Make a shareable pack</button><button onclick="go(2)">Try something else</button><button onclick="go(6)">Dashboard →</button></div><div id="ad" style="margin-top:10px"></div>`;
+  const head={testing:`<h3>Your decision</h3><p>You're still <b>trying</b> ${esc(c.name)}. Nothing has changed in your Claude yet.</p>`,
+    installed:`<h3>Kept ✓</h3><p>You kept ${esc(c.name)} on ${esc(c.decided)}. Every Claude Code session can now use it.</p>`,
+    rejected:`<h3>Skipped</h3><p>You skipped ${esc(c.name)} on ${esc(c.decided)}. Nothing was added to your Claude.</p>`,
+    uninstalled:`<h3>Removed</h3><p>You kept ${esc(c.name)}, then removed it on ${esc(c.decided)}.</p>`}[st];
+  box.innerHTML=`${head}<div class="row">${decisionButtons(c,true)}<button onclick="pack('${esc(c.id)}')">Make a shareable pack</button><button onclick="go(2)">Try something else</button><button onclick="go(6)">Home →</button></div><div id="ad" style="margin-top:10px"></div>`;
 }
 function openTest(tid,rep){const c=document.getElementById(`test-${tid}-${rep}`);if(!c)return;const d=c.querySelector('details');if(d)d.open=true;
   c.scrollIntoView({behavior:'smooth',block:'start'});c.style.outline='2px solid var(--accent)';setTimeout(()=>c.style.outline='',1600)}
 function ans(x){if(!x)return'(missing)';let s=x.output||'';for(const[k,v]of Object.entries(x.files||{}))s+=`\n\n[file: ${k}]\n${v}`;if(x.error)s+=`\n\n[error: ${x.error}]`;return s}
-const STATUS={testing:{label:'Testing',past:'testing since',cls:''},installed:{label:'Installed',past:'installed',cls:'good'},
-  rejected:{label:'Rejected',past:'rejected',cls:'bad'},uninstalled:{label:'Uninstalled',past:'uninstalled',cls:'warn'}};
-function statusTag(st){const x=STATUS[st||'testing'];return `<span class="tag st-${x.cls||'testing'}">${st=='installed'?'Installed ✓':x.label}</span>`}
+const STATUS={testing:{label:'Trying',past:'trying since',cls:''},installed:{label:'Kept',past:'kept',cls:'good'},
+  rejected:{label:'Skipped',past:'skipped',cls:'bad'},uninstalled:{label:'Removed',past:'removed',cls:'warn'}};
+function statusTag(st){const x=STATUS[st||'testing'];return `<span class="tag st-${x.cls||'testing'}">${st=='installed'?'Kept ✓':x.label}</span>`}
 function decisionButtons(c,big){const id=esc(c.id),st=c.status||'testing';
-  if(st=='testing')return `<button class="${big?'primary':''}" onclick="decide('${id}','install')">Install</button><button onclick="decide('${id}','reject')">Reject</button>`;
-  if(st=='installed')return `<button onclick="decide('${id}','uninstall')">Uninstall</button>`;
-  return `<button onclick="decide('${id}','reconsider')">Test again</button>`}
+  if(st=='testing')return `<button class="${big?'primary':''}" onclick="decide('${id}','install')">Keep</button><button onclick="decide('${id}','reject')">Skip</button>`;
+  if(st=='installed')return `<button onclick="decide('${id}','uninstall')">Remove</button>`;
+  return `<button onclick="decide('${id}','reconsider')">Try again</button>`}
 async function decide(cid,mode){
-  const msg={install:'Install this capability? It will be copied into ~/.claude so every Claude Code session can use it.',
-    uninstall:'Uninstall? This removes the files the lab installed from ~/.claude.',reject:null,reconsider:null}[mode];
+  const msg={install:'Keep this capability? It will be copied into ~/.claude so every Claude Code session can use it.',
+    uninstall:'Remove it? This deletes the files the lab added to ~/.claude.',reject:null,reconsider:null}[mode];
   if(msg&&!confirm(msg))return;
   try{const r=await api('/api/adopt',{candidate_id:cid,mode,run_id:S.runId});
     if(STEPS[S.step].k=='results'){await drawDecide(cid);
@@ -392,129 +412,102 @@ async function decide(cid,mode){
 }
 async function pack(cid){try{const r=await api('/api/adopt',{candidate_id:cid,mode:'pack',run_id:S.runId});
   $('#ad').innerHTML=`<span class="ok">Pack saved:</span> <span class="mono">${esc(r.path)}</span> <button onclick="api('/api/open',{path:${esc(JSON.stringify(r.path))}})">Show in Finder</button>`}catch(e){$('#ad').innerHTML=`<span class="err">${esc(e.message)}</span>`}}
-// ---- dashboard ----
+// ---- home ----
+let CHK=null;
+const FIX=['edit_file','create_claude_md','save_memory','ask_claude'];
+const shortV=v=>{const h=(v||'').split(/[:.]/)[0];return{'Adopt':'Worth keeping','Worth installing':'Worth keeping',"Don't adopt":'Better to skip','Better to reject':'Better to skip'}[h]||h};
+function toast(html){let t=$('#toast');if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t)}
+  t.innerHTML=html+' <button class="link" onclick="this.parentNode.classList.remove(\'on\')">Close</button>';t.classList.add('on');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('on'),12000)}
+function ago(id){const m=id.match(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})/);if(!m)return'';const d=new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]);const s=(Date.now()-d)/1000;
+  return s<90?'just now':s<3600?Math.round(s/60)+' minutes ago':s<86400?Math.round(s/3600)+' hours ago':Math.round(s/86400)+' days ago'}
 V.dashboard=async()=>{
-  const d=await api('/api/dashboard');S.done.dashboard=true;S.dash=d;
-  const sub=c=>{const x=c.skills.concat(c.agents).join(', ')||(c.has_rules?'rules':'');return x==c.name?'':x};
-  const C=d.candidates,inst=C.filter(c=>c.status=='installed'),pend=C.filter(c=>(c.status||'testing')=='testing').sort((a,b)=>(b.latest?1:0)-(a.latest?1:0)),rej=C.filter(c=>c.status=='rejected'||c.status=='uninstalled');
-  const short=v=>{const h=(v||'').split(/[:.]/)[0];return{'Adopt':'Worth installing',"Don't adopt":'Better to reject'}[h]||h};
-  const openRun=id=>`S.runId='${id}';save();go(5)`;
-  const testIt=c=>`S.cand='${esc(c.id)}';save();go(4)`;
-  const running=d.runs.filter(r=>r.state=='running');
-  const status=[inst.length?`${inst.length} capabilit${inst.length==1?'y':'ies'} installed`:'Nothing installed by the lab yet',
-    pend.length?`${pend.length} waiting for your decision`:'nothing waiting',d.fixes.open.length?`${d.fixes.open.length} fix${d.fixes.open.length==1?'':'es'} to make`:'',running.length?`${running.length} test running`:''].filter(Boolean).join(' · ');
-  const tile=(n,label,cls,target)=>`<button class="kpi ${cls}" onclick="document.getElementById('${target}').scrollIntoView({behavior:'smooth',block:'start'})"><span class="n">${n}</span><span class="l">${label}</span></button>`;
-  const decCard=c=>`<div class="dcard"><div class="row" style="gap:8px"><b class="grow">${esc(c.name)}</b>${c.running?'<span class="tag">running</span>':''}</div>
-     <div class="muted small">${esc(sub(c))}</div>
-     ${c.latest?`<div class="vline">${esc(short(c.latest.verdict))}</div>${resBar(c.latest)}<div class="muted small">${c.latest.trigger?esc(c.latest.trigger):''}</div>`
-       :'<div class="vline muted">Not tested yet</div><div class="muted small">Run a test before deciding.</div>'}
-     <div class="row dact">${c.latest?`<button class="primary" onclick="decide('${esc(c.id)}','install')">Install</button><button onclick="decide('${esc(c.id)}','reject')">Reject</button><button class="link" onclick="${openRun(c.latest.run_id)}">Results</button>`
-       :`<button class="primary" onclick="${testIt(c)}">Run a test</button><button onclick="decide('${esc(c.id)}','reject')">Reject</button>`}</div></div>`;
-  const tab=S.dtab||'caps';
-  $('#main').innerHTML=`<div class="dhead"><div class="grow"><h2 style="margin:0">Dashboard</h2><div class="muted">${status}</div></div><div id="checkbtn"></div></div>
-  <div class="kpis">${tile(inst.length,'Installed','k-good','sec-setup')}${tile(pend.length,'Waiting for a decision','k-acc','sec-pending')}<button class="kpi k-warn" onclick="S.opf='fix';drawCheck().then(()=>document.getElementById('checkcard').scrollIntoView({behavior:'smooth',block:'start'}))"><span class="n">${d.fixes.open.length}</span><span class="l">Fixes to make${d.fixes.done.length?` · <span class="win">${d.fixes.done.length} done</span>`:''}</span></button>${tile(rej.length,'Rejected or removed','k-bad','sec-tables')}${tile(d.runs.length,'Test runs','','sec-tables')}</div>
-  <div class="dgrid">
-   <section id="checkcard" class="panel"><p class="muted">Loading setup check…</p></section>
-   <section id="sec-setup" class="panel">
-    <div class="ptitle">Your Claude setup now</div>
-    <div class="muted small" style="margin-bottom:10px">In the order Claude meets it. Checked against the files on disk just now.</div>
-    <div id="readlayers"></div>
-    <div class="layer"><div class="lname">Installed by the lab</div>
-     ${inst.length?inst.map(c=>`<div class="lrow"><span class="dot ${c.files_ok?'g':'r'}"></span><span class="grow">${esc(c.name)}${c.files_ok?'':' <span class="err small">files missing</span>'}<span class="muted small"> · ${esc((c.decided||'').slice(0,10))}</span></span><button class="link" onclick="decide('${esc(c.id)}','uninstall')">Uninstall</button></div>`).join('')
-       :'<div class="muted small">None yet. Your Claude runs on your memory, rules and account skills.</div>'}</div>
-    ${d.outside.length?`<div class="layer"><div class="lname">Installed outside the lab</div><div class="chips">${d.outside.map(o=>`<span class="chip open" onclick="view(${esc(JSON.stringify(o.path))})">${esc(o.name)}</span>`).join('')}</div></div>`:''}
-    <div class="layer"><div class="lname">From your Claude account <span class="muted small">· managed in Claude's settings</span></div><div class="chips">${d.synced.map(x=>`<span class="chip">${esc(x)}</span>`).join('')||'<span class="muted small">none</span>'}</div></div>
-    <div id="issuelayer"></div>
-   </section>
+  const [d,ck,conn]=await Promise.all([api('/api/dashboard'),api('/api/check'),api('/api/connect')]);
+  S.done.dashboard=true;S.dash=d;CHK=ck.check;const live=ck.live,checking=live&&live.state=='running';
+  const C=d.candidates,kept=C.filter(c=>c.status=='installed');
+  const testIt=c=>`S.cand='${esc(c.id)}';save();go(4)`,openRun=id=>`S.runId='${id}';save();go(5)`;
+  // one ranked to-do list: decisions, things to try, fixes
+  const items=[];
+  if(!CHK&&!checking)items.push({score:3.5,tag:'check',title:'Run your first setup check',
+    body:'The lab reads your memory, instructions and past sessions on this Mac, then asks Claude for the changes most likely to help. One Sonnet review, usually under 40 cents.',
+    btns:`<button class="primary" onclick="runCheck(this)">Check my setup</button>`});
+  C.filter(c=>(c.status||'testing')=='testing').forEach(c=>{
+    if(c.latest){const v=shortV(c.latest.verdict),skip=v=='Better to skip';
+      items.push({score:v=='Worth keeping'?3.2:skip?2.4:2.2,tag:'decide',title:`${c.name}: ${v.toLowerCase()}`,
+        body:`${resBar(c.latest)}${c.latest.trigger?`<div class="muted small">${esc(c.latest.trigger)}</div>`:''}`,
+        btns:skip?`<button class="primary" onclick="decide('${esc(c.id)}','reject')">Skip</button><button onclick="decide('${esc(c.id)}','install')">Keep</button>`
+                 :`<button class="primary" onclick="decide('${esc(c.id)}','install')">Keep</button><button onclick="decide('${esc(c.id)}','reject')">Skip</button>`,
+        links:`<button class="link" onclick="${openRun(c.latest.run_id)}">See examples</button>`})}
+    else if(c.running)items.push({score:2,tag:'try',title:`Testing ${c.name}…`,body:'<span class="muted">A test is running. This updates when it finishes.</span>',btns:''});
+    else items.push({score:2,tag:'try',title:`Test ${c.name}`,body:`<span class="muted">Added for trying, not tested yet.</span>`,
+      btns:`<button class="primary" onclick="${testIt(c)}">Run a test</button>`,links:`<button class="link" onclick="decide('${esc(c.id)}','reject')">Skip</button>`})});
+  const imp={high:3,medium:2,low:1},eff={low:.1,medium:0,high:-.1};
+  const known=new Set(C.map(c=>c.name));
+  (CHK?CHK.report.opportunities:[]).forEach((o,i)=>{if(o.state!='open')return;
+    const a=o.action||{};if((a.type=='test_catalog'&&known.has(a.id))||(a.type=='draft_skill'&&known.has(slugJS(a.name))))return; // already trying, kept or skipped
+    items.push({score:(imp[o.impact]||1)+(eff[o.effort]||0),tag:FIX.includes((o.action||{}).type)?'fix':'try',title:o.title,
+      meta:`${o.impact} impact · ${o.effort} effort`,
+      body:`<div>${esc(o.why)}</div>${(o.evidence||[]).length?`<div class="chips" style="margin-top:6px">${o.evidence.map(e=>`<span class="chip q">“${esc(e)}”</span>`).join('')}</div>`:''}<div id="op-${i}"></div>`,
+      btns:actionButton(o,i),links:`<button class="link" onclick="markOp(${i},'done')">Done</button> · <button class="link" onclick="markOp(${i},'dismissed')">Not now</button>`})});
+  d.fixes.open.filter(x=>x.kind=='issue').forEach(x=>items.push({score:{high:2.8,medium:1.8,low:.8}[x.severity]||1,tag:'fix',title:x.title,meta:'found by the lab\'s checks',
+    body:`<div>${esc(x.detail)}</div>`,btns:/\.md$/.test(x.path)?`<button class="primary" onclick="view(${esc(JSON.stringify(x.path))})">Open file</button>`:''}));
+  items.sort((a,b)=>b.score-a.score);
+  const doneList=[...d.fixes.done.map(x=>({t:x.title,s:x.kind=='issue'?'resolved':'done'})),
+    ...C.filter(c=>['installed','rejected','uninstalled'].includes(c.status)).map(c=>({t:c.name,s:STATUS[c.status].past+' '+(c.decided||'').slice(0,10),cid:c.id,st:c.status}))];
+  const inv=d.fixes.inv||{};
+  const tag=t=>`<span class="ttag t-${t}">${{fix:'fix',try:'try',decide:'decide',check:'start here'}[t]}</span>`;
+  $('#main').innerHTML=`${conn.logged_in?'':`<div class="banner">Claude isn't signed in yet, so tests and checks can't run. <button class="primary" onclick="go(0)">Connect</button></div>`}
+  <div class="dhead"><div class="grow"><h2 style="margin:0">Your Claude</h2><div class="muted">${checking?`<b style="color:var(--accent)">${esc(live.stage)}…</b>`:CHK?`Setup checked ${ago(CHK.id)}`:'Not checked yet'}</div></div>
+   ${CHK||checking?`<button onclick="runCheck(this)" ${checking?'disabled':''}>${checking?'Checking…':'Check again'}</button>`:''}<button class="primary" onclick="go(2)">Try something new</button></div>
+  <div class="kpis k3">
+   <button class="kpi k-good" onclick="openDet('det-setup')"><span class="n">${kept.length}</span><span class="l">kept from the lab</span><span class="s">plus ${(inv.always||0)+(inv.on_demand||0)} memory and rules files, ${d.synced.length} account skills</span></button>
+   <button class="kpi k-acc" onclick="document.getElementById('todo').scrollIntoView({behavior:'smooth'})"><span class="n">${items.length}</span><span class="l">to do</span><span class="s">${['fix','decide','try'].map(t=>{const n=items.filter(x=>x.tag==t).length;return n?`${n} ${t=='fix'?'fix'+(n>1?'es':''):t=='decide'?'to decide':'to try'}`:''}).filter(Boolean).join(' · ')||'all clear'}</span></button>
+   <button class="kpi" onclick="openDet('det-done')"><span class="n">${doneList.length}</span><span class="l">done</span><span class="s">fixes made, capabilities kept or skipped</span></button>
   </div>
-  <div id="sec-pending" class="stitle">Needs a decision <span class="muted">(${pend.length})</span></div>
-  ${pend.length?`<div class="dcards">${pend.map(decCard).join('')}</div>`:`<div class="panel muted">Nothing waiting. <span class="open" onclick="go(2)">Try a new capability →</span></div>`}
-  <div id="sec-tables" class="stitle row"><span class="grow">History</span>
-   <span class="seg"><button class="${tab=='caps'?'on':''}" onclick="S.dtab='caps';render()">Capabilities (${C.length})</button><button class="${tab=='runs'?'on':''}" onclick="S.dtab='runs';render()">Runs (${d.runs.length})</button></span></div>
-  <div class="panel" style="padding:0;overflow-x:auto">${tab=='caps'?(C.length?`<table class="tests dtable"><thead><tr><th>Capability</th><th>Status</th><th>Latest result</th><th>Runs</th><th>Avg cost without / with</th></tr></thead><tbody>
-   ${C.map(c=>`<tr onclick="${c.latest?openRun(c.latest.run_id):testIt(c)}"><td><b>${esc(c.name)}</b><div class="muted small">${esc(sub(c))}</div></td>
-     <td>${statusTag(c.status)}<div class="muted small">${esc((c.decided||c.created||'').slice(0,10))}</div></td><td style="min-width:180px">${c.latest?`<div class="small">${esc(short(c.latest.verdict))}</div>${resBar(c.latest)}`:'<span class="muted small">not tested</span>'}</td>
-     <td>${c.runs}</td><td class="mono small" style="white-space:nowrap">${c.latest?`$${c.latest.cost_baseline.toFixed(3)} / $${c.latest.cost_with.toFixed(3)}`:'–'}</td></tr>`).join('')}</tbody></table>`:'<p class="muted" style="padding:16px">None yet.</p>')
-   :(d.runs.length?`<table class="tests dtable"><thead><tr><th>When</th><th>Capability</th><th>Tests</th><th>Model</th><th>Result</th></tr></thead><tbody>
-   ${d.runs.map(r=>`<tr onclick="${openRun(r.id)}"><td style="white-space:nowrap" class="small">${esc(r.id.replace(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2}).*/,'$1-$2-$3 $4:$5'))}</td><td><b>${esc(r.candidate||'')}</b></td><td class="small">${r.tasks} × ${r.reps}</td><td class="small">${esc(r.model)}</td>
-     <td style="min-width:180px">${r.summary?`<div class="small">${esc(short(r.summary.verdict))}${r.summary.errors?` · <span class="err">${r.summary.errors} errors</span>`:''}</div>${resBar(r.summary)}`:r.state=='running'?`<span style="color:var(--accent)" class="small">running${r.progress?` ${r.progress[0]}/${r.progress[1]}`:''}</span>`:'<span class="muted small">stopped before finishing</span>'}</td></tr>`).join('')}</tbody></table>`:'<p class="muted" style="padding:16px">No runs yet.</p>')}</div>`;
-  await drawCheck();
-  if(running.length)setTimeout(()=>{if(STEPS[S.step].k=='dashboard')render()},5000);
+  <div id="todo" class="panel">
+   <div class="ptitle">To do</div>
+   ${items.length?items.map((x,n)=>`<div class="todo"><div class="tnum">${n+1}</div><div class="grow">
+      <div class="ttitle">${tag(x.tag)} ${esc(x.title)}</div>${x.meta?`<div class="opmeta">${esc(x.meta)}</div>`:''}<div class="tbody">${x.body}</div></div>
+      <div class="tbtns"><div class="row" style="gap:6px;flex-wrap:nowrap;justify-content:flex-end">${x.btns||''}</div>${x.links?`<div class="small">${x.links}</div>`:''}</div></div>`).join('')
+    :'<p class="muted">Nothing to do. <span class="open" onclick="go(2)">Try something new</span>, or check your setup again later.</p>'}
+  </div>
+  <details id="det-setup" class="fold"><summary>What Claude reads</summary><div class="panel">${setupLayers(d)}</div></details>
+  <details id="det-done" class="fold"><summary>Done (${doneList.length})</summary><div class="panel">${doneList.map(x=>`<div class="lrow"><span class="dot ${x.st=='rejected'?'n':'g'}"></span><span class="grow">${esc(x.t)}</span><span class="muted small">${esc(x.s)}</span>${x.st=='installed'?`<button class="link" onclick="decide('${esc(x.cid)}','uninstall')">Remove</button>`:x.st?`<button class="link" onclick="decide('${esc(x.cid)}','reconsider')">Try again</button>`:''}</div>`).join('')||'<span class="muted">Nothing yet.</span>'}</div></details>
+  <details id="det-hist" class="fold"><summary>History (${d.runs.length} test runs)</summary><div class="panel" style="padding:0;overflow-x:auto">${historyTable(d)}</div></details>`;
+  if(checking||d.runs.some(r=>r.state=='running'))setTimeout(()=>{if(STEPS[S.step].k=='dashboard'&&!document.querySelector('#todo textarea,#todo input'))render()},4000);
 };
+function slugJS(x){return String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,48)}
+function openDet(id){const e=document.getElementById(id);e.open=true;e.scrollIntoView({behavior:'smooth'})}
+function setupLayers(d){const inv=CHK&&CHK.inventory,kept=d.candidates.filter(c=>c.status=='installed'),chip=e=>`<span class="chip open" onclick="view(${esc(JSON.stringify(e.path))})">${esc(e.label.split('/').pop())}</span>`;
+  return `${inv?`<div class="layer"><div class="lname">Read every session <span class="muted small">· about ${inv.always_tokens.toLocaleString()} tokens</span></div><div class="chips">${inv.always.map(chip).join('')||'<span class="muted small">nothing</span>'}</div></div>
+   <div class="layer"><div class="lname">Read when relevant</div><div class="chips">${inv.on_demand.map(chip).join('')}</div></div>`:'<p class="muted small">Run a setup check to see what Claude reads and when.</p>'}
+   <div class="layer"><div class="lname">Kept from the lab</div>${kept.map(c=>`<div class="lrow"><span class="dot ${c.files_ok?'g':'r'}"></span><span class="grow">${esc(c.name)}${c.files_ok?'':' <span class="err small">files missing</span>'}</span><button class="link" onclick="decide('${esc(c.id)}','uninstall')">Remove</button></div>`).join('')||'<span class="muted small">None yet.</span>'}</div>
+   ${d.outside.length?`<div class="layer"><div class="lname">Added outside the lab</div><div class="chips">${d.outside.map(chip).join('')}</div></div>`:''}
+   <div class="layer"><div class="lname">From your Claude account <span class="muted small">· managed in Claude's settings</span></div><div class="chips">${d.synced.map(x=>`<span class="chip">${esc(x)}</span>`).join('')||'<span class="muted small">none</span>'}</div></div>
+   <p class="muted small">To read or edit your memory and rules files one by one, open <span class="open" onclick="go(1)">Your current setup</span>.</p>`}
+function historyTable(d){const openRun=id=>`S.runId='${id}';save();go(5)`;
+  return d.runs.length?`<table class="tests dtable"><thead><tr><th>When</th><th>Capability</th><th>Tests</th><th>Result</th></tr></thead><tbody>
+   ${d.runs.map(r=>`<tr onclick="${openRun(r.id)}"><td style="white-space:nowrap" class="small">${esc(r.id.replace(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2}).*/,'$1-$2-$3 $4:$5'))}</td><td><b>${esc(r.candidate||'')}</b></td><td class="small">${r.tasks} × ${r.reps}</td>
+     <td style="min-width:180px">${r.summary?`<div class="small">${esc(shortV(r.summary.verdict))}</div>${resBar(r.summary)}`:r.state=='running'?'<span class="small" style="color:var(--accent)">running</span>':'<span class="muted small">stopped before finishing</span>'}</td></tr>`).join('')}</tbody></table>`:'<p class="muted" style="padding:16px">No runs yet.</p>'}
 function resBar(l){const n=(l.wins+l.losses+l.ties)||1,w=x=>(100*x/n).toFixed(1);
   return `<div class="rbar" title="${l.wins} better · ${l.losses} worse · ${l.ties} tie"><i class="w" style="width:${w(l.wins)}%"></i><i class="t" style="width:${w(l.ties)}%"></i><i class="l" style="width:${w(l.losses)}%"></i></div>
    <div class="muted small"><span class="win">${l.wins} better</span> · <span class="loss">${l.losses} worse</span> · ${l.ties} tie</div>`}
-// ---- setup check ----
-let CHK=null;
-async function drawCheck(){
-  const box=$('#checkcard');if(!box)return;
-  const r=await api('/api/check');CHK=r.check;const live=r.live;
-  const btnBox=$('#checkbtn');
-  if(live&&live.state=='running'){if(btnBox)btnBox.innerHTML=`<button class="primary" disabled>Checking…</button>`;
-    box.innerHTML=`<div class="ptitle">Setup check</div><p><b>${esc(live.stage)}…</b></p><div class="bar"><div style="width:${live.stage.startsWith('Taking')?15:live.stage.startsWith('Reading')?35:70}%"></div></div>`;
-    setTimeout(()=>{if(STEPS[S.step].k=='dashboard')drawCheck()},3000);return}
-  if(btnBox)btnBox.innerHTML=`<button class="primary big" onclick="runCheck(this)">${CHK?'Check my setup again':'Check my setup'}</button>`;
-  const err=live&&live.state=='error'?`<p class="err">The last check failed: ${esc(live.error)}</p>`:'';
-  if(!CHK){box.innerHTML=`<div class="ptitle">Setup check</div><p>The lab reads your memory, instructions and rules pages, looks at what you've asked Claude for in past sessions, and asks Claude for a plain assessment and the few changes most likely to help. Each suggestion comes with a button to act on it.</p>
-    <p class="muted small">Reading happens on this Mac, then one Sonnet review, usually under 40 cents. Nothing changes until you act.</p>${err}
-    ${S.dash&&S.dash.fixes.open.length?`<div class="lname" style="margin-top:14px">Fixes found so far (${S.dash.fixes.open.length})</div>${issueCards(S.dash.fixes,'fix')}`:''}`;return}
-  const rep=CHK.report,inv=CHK.inventory,ev=CHK.evidence,prev=CHK.previous;
-  const ops=rep.opportunities||[];const open=ops.filter(o=>o.state=='open');
-  const FIX=['edit_file','create_claude_md','save_memory','ask_claude'],isFix=o=>FIX.includes((o.action||{}).type);
-  const f=S.opf||'all',fx=(S.dash&&S.dash.fixes)||{open:[],done:[]};
-  const shown=i=>f=='all'||(f=='fix'?isFix(ops[i]):!isFix(ops[i]));
-  const nFix=fx.open.length,nCap=ops.filter(o=>!isFix(o)&&o.state=='open').length;
-  const when=CHK.id.replace(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2}).*/,'$1-$2-$3 $4:$5');
-  const order=[...ops.keys()].sort((x,y)=>(ops[x].state=='open'?0:1)-(ops[y].state=='open'?0:1)||x-y);
-  box.innerHTML=`<div class="row"><div class="ptitle grow" style="margin:0">Best opportunities <span class="muted" style="font-weight:400">· ${open.length} open of ${ops.length}</span></div><span class="muted small">checked ${when}</span></div>
-   ${err}<p class="summary">${esc(rep.summary||'')}</p>
-   <div class="seg" style="margin-bottom:12px">${[['all','All'],['fix',`Fixes (${nFix})`],['cap',`New capabilities (${nCap})`]].map(([k,l])=>`<button class="${f==k?'on':''}" onclick="S.opf='${k}';drawCheck()">${l}</button>`).join('')}</div>
-   ${f=='fix'?`<p class="muted small" style="margin-top:0">Repairs to what you already have. Issues are checked live, so a fix drops off as soon as you make it.</p>`:f=='cap'?`<p class="muted small" style="margin-top:0">New skills and agents. Each goes through Testing before you install it.</p>`:''}
-   ${order.filter(shown).map(i=>{const o=ops[i];return `<div class="opcard imp-${esc(o.impact)} ${o.state!='open'?'closed':''}"><div class="row" style="align-items:flex-start;gap:12px"><div class="grow">
-      <div class="optitle">${esc(o.title)}${o.state=='done'?' <span class="tag st-good">done ✓</span>':o.state=='dismissed'?' <span class="tag">dismissed</span>':''}</div>
-      <div class="opmeta">${esc(o.impact)} impact · ${esc(o.effort)} effort</div>
-      ${o.state=='open'?`<div>${esc(o.why)}</div>${(o.evidence||[]).length?`<div class="chips" style="margin-top:6px">${o.evidence.map(e=>`<span class="chip q">“${esc(e)}”</span>`).join('')}</div>`:''}`:''}
-      <div id="op-${i}"></div></div>
-      <div class="opbtns">${o.state=='open'?actionButton(o,i)+`<div class="small"><button class="link" onclick="markOp(${i},'done')">Done</button> · <button class="link" onclick="markOp(${i},'dismissed')">Dismiss</button></div>`:`<button class="link" onclick="markOp(${i},'open')">Reopen</button>`}</div></div></div>`}).join('')}
-   ${f!='cap'?issueCards(fx,f):''}
-   <details style="margin-top:12px"><summary class="muted small">What your setup does, piece by piece</summary>
-     <table class="tests"><tbody>${(rep.pieces||[]).map(p=>`<tr style="cursor:default"><td><b>${esc(p.name)}</b></td><td>${esc(p.what_it_does)}</td><td class="muted">${esc(p.assessment)}</td></tr>`).join('')}</tbody></table></details>`;
-  const rl=$('#readlayers');
-  if(rl)rl.innerHTML=`<div class="layer"><div class="lname">Read every session <span class="muted small">· about ${inv.always_tokens.toLocaleString()} tokens</span></div><div class="chips">${inv.always.map(e=>`<span class="chip open" onclick="view(${esc(JSON.stringify(e.path))})">${esc(e.label.split('/').pop())}</span>`).join('')||'<span class="muted small">nothing</span>'}</div></div>
-    <div class="layer"><div class="lname">Read when relevant <span class="muted small">· ${inv.on_demand.length} files</span></div><div class="chips">${inv.on_demand.map(e=>`<span class="chip open" onclick="view(${esc(JSON.stringify(e.path))})">${esc(e.label.split('/').pop())}</span>`).join('')}</div></div>
-`;
-  const il=$('#issuelayer');
-  const liveIss=(S.dash&&S.dash.fixes.live_issues)||inv.issues;
-  if(il)il.innerHTML=`<div class="layer"><div class="lname">Issues found <span class="muted small">· ${liveIss.length} now${liveIss.length!=inv.issues.length?`, ${inv.issues.length} at the last check`:''}</span></div>
-     ${liveIss.map(x=>`<div class="lrow"><span class="dot ${x.severity=='high'?'r':x.severity=='medium'?'y':'n'}"></span><span class="grow small">${esc(x.title)}</span>${/\.md$/.test(x.path)?`<button class="link" onclick="view(${esc(JSON.stringify(x.path))})">Open</button>`:''}</div>`).join('')||'<div class="muted small">None.</div>'}</div>
-    <div class="muted small">${ev.sessions} past sessions reviewed.</div>`;
-}
-function issueCards(fx,f){
-  const iss=fx.open.filter(x=>x.kind=='issue');
-  const done=fx.done;
-  let h=iss.length?`${f=='all'?'<div class="lname" style="margin-top:14px">Other fixes found by the checks</div>':''}${iss.map(x=>`<div class="opcard imp-${x.severity=='high'?'high':x.severity=='medium'?'medium':'low'}"><div class="row" style="align-items:flex-start;gap:12px"><div class="grow">
-     <div class="optitle">${esc(x.title)}</div><div class="opmeta">${esc(x.severity)} priority · found by the lab's own checks</div><div>${esc(x.detail)}</div></div>
-     <div class="opbtns">${/\.md$/.test(x.path)?`<button class="primary" onclick="view(${esc(JSON.stringify(x.path))})">Open file</button>`:''}</div></div></div>`).join('')}`:'';
-  if(f=='fix'&&done.length)h+=`<div class="lname" style="margin-top:14px">Fixed</div>${done.map(x=>`<div class="lrow"><span class="dot g"></span><span class="grow small">${esc(x.title)}</span><span class="muted small">${esc(x.kind=='issue'?'resolved':'done')}</span></div>`).join('')}`;
-  if(f=='fix'&&!iss.length&&!fx.open.length&&!done.length)h+='<p class="muted">No fixes needed right now.</p>';
-  return h}
 function actionButton(o,i){const a=o.action||{};
-  const L={test_catalog:'Test it',draft_skill:'Draft the skill',save_memory:'Review and save',edit_file:'Open file',create_claude_md:'Review and create',ask_claude:'Copy prompt'}[a.type];
+  const L={test_catalog:'Try it',draft_skill:'Draft the skill',save_memory:'Review and save',edit_file:'Open file',create_claude_md:'Review and create',ask_claude:'Copy prompt'}[a.type];
   return L?`<button class="primary" onclick="doAction(${i},this)">${L}</button>`:''}
-async function runCheck(b){b.disabled=true;try{await api('/api/check',{});drawCheck()}catch(e){alert(e.message);b.disabled=false}}
+async function runCheck(b){b.disabled=true;try{await api('/api/check',{});render()}catch(e){alert(e.message);b.disabled=false}}
 async function markOp(i,state){await api('/api/check/mark',{check_id:CHK.id,index:i,state});render()}
 async function doAction(i,btn){
   const o=CHK.report.opportunities[i],a=o.action,slot=$('#op-'+i);
-  const done=async(html)=>{await api('/api/check/mark',{check_id:CHK.id,index:i,state:'done'});await render();const s2=$('#op-'+i);if(s2)s2.innerHTML=`<div class="ok" style="margin-top:6px">${html}</div>`};
+  const done=async(html)=>{await api('/api/check/mark',{check_id:CHK.id,index:i,state:'done'});await render();toast(html)};
   try{
   if(a.type=='test_catalog'){btn.disabled=true;btn.textContent='Adding…';const r=await api('/api/quick',{id:a.id});S.cand=r.candidate.id;save();
-    await done(`Now testing ${esc(r.candidate.name)}; ${r.tasks_added} test tasks added. <span class="open" onclick="go(4)">Run the comparison →</span>`)}
+    await done(`Now trying ${esc(r.candidate.name)}; ${r.tasks_added} test tasks added. <span class="open" onclick="go(4)">Run the test →</span>`)}
   else if(a.type=='ask_claude'){await navigator.clipboard.writeText(a.prompt);btn.textContent='Copied';slot.innerHTML=`<pre>${esc(a.prompt)}</pre><div class="muted">Paste this into a Claude session, then click Done.</div>`}
   else if(a.type=='edit_file'){slot.innerHTML=`<div class="muted" style="margin-top:6px">Suggested change: ${esc(a.suggestion)}</div>`;view(a.path)}
   else if(a.type=='draft_skill'){slot.innerHTML=`<div style="margin-top:8px"><label>Name</label><input type="text" id="ds-n" value="${esc(a.name)}"><label>When Claude should use it</label><input type="text" id="ds-d" value="${esc(a.description)}">
-      <label>Instructions</label><textarea id="ds-i" style="min-height:160px">${esc(a.instructions)}</textarea><div class="row" style="margin-top:8px"><button class="primary" id="ds-go">Add for testing</button><span class="muted">It enters Testing like any other capability. Nothing is installed.</span></div></div>`;
+      <label>Instructions</label><textarea id="ds-i" style="min-height:160px">${esc(a.instructions)}</textarea><div class="row" style="margin-top:8px"><button class="primary" id="ds-go">Add for testing</button><span class="muted">It goes in for trying like any other capability. Nothing changes in your Claude until you keep it.</span></div></div>`;
     $('#ds-go').onclick=async()=>{const r=await api('/api/act/draft_skill',{name:$('#ds-n').value,description:$('#ds-d').value,instructions:$('#ds-i').value});S.cand=r.candidate.id;save();
-      await done(`Now testing ${esc(r.candidate.name)}. Add test tasks in <span class="open" onclick="go(3)">step 4</span>, then run it.`)}}
+      await done(`Now trying ${esc(r.candidate.name)}. Add test tasks in <span class="open" onclick="go(3)">step 4</span>, then run it.`)}}
   else if(a.type=='save_memory'){slot.innerHTML=`<div style="margin-top:8px"><label>Name</label><input type="text" id="sm-n" value="${esc(a.name)}"><label>One-line description (goes in MEMORY.md)</label><input type="text" id="sm-d" value="${esc(a.description)}">
       <label>Note</label><textarea id="sm-b" style="min-height:120px">${esc(a.body)}</textarea><div class="row" style="margin-top:8px"><button class="primary" id="sm-go">Save to memory</button><span class="muted">Adds a note and a line in MEMORY.md. Claude reads it from the next session.</span></div></div>`;
     $('#sm-go').onclick=async()=>{try{const r=await api('/api/act/save_memory',{name:$('#sm-n').value,description:$('#sm-d').value,body:$('#sm-b').value});

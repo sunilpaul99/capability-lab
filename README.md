@@ -23,15 +23,19 @@ Then double-click **Start Capability Lab** in the folder. It opens in your brows
 
 Or from Terminal: `python3 server.py`
 
-## The six steps
+## How it works
+
+**Home** is where you start: one ranked to-do list that mixes fixes to your setup, capabilities waiting for a keep-or-skip decision, and new things to try, with three tiles (kept from the lab, to do, done). The setup check, what Claude reads, finished items and run history are one click away.
+
+To try a capability step by step:
 
 1. **Connect.** Finds Claude Code and checks that you're signed in.
 2. **Your current setup.** Your memory files, CLAUDE.md, voice and style guides: the "before" in each comparison.
 3. **Add a new capability.** Pick one of eleven vetted capabilities with **Try it** (Anthropic's skills, obra/superpowers, VoltAgent agents), each with matching test tasks. Or bring your own: a GitHub link (repo, folder, or single file), a local folder, or pasted text.
 4. **Pick test tasks.** Real things you ask Claude to do, each with an optional line on what good looks like. You can pull tasks from your past Claude Code sessions.
 5. **Run.** Each task runs with and without the capability. You see the worst-case cost before starting.
-6. **Results and decision.** Verdict, better/worse/tie counts, whether the capability was actually used, cost, and both answers side by side. Install or reject it, or export a zip pack with the results to share.
-7. **Dashboard.** Starts with **Check my setup**: one button that inventories what Claude reads and when, finds mechanical problems (no CLAUDE.md, broken links, pages nothing points to), reads your past Claude Code sessions for what you ask for and where you correct Claude, then asks Claude (one Sonnet call, usually under 40 cents) for a plain assessment and the best few improvements. Each suggestion has a button: test a catalog capability, draft a skill for testing, save a memory note, create a CLAUDE.md, open a file, or copy a prompt. Below that: what's installed in your Claude now (checked against the files on disk), what's waiting for a decision, every capability's latest result, and every run.
+6. **Results and decision.** Verdict, better/worse/tie counts, whether the capability was actually used, cost, and both answers side by side. Keep or skip it, or export a zip pack with the results to share.
+**Check my setup** (on Home): one button that inventories what Claude reads and when, finds mechanical problems (no CLAUDE.md, broken links, pages nothing points to), reads your past Claude Code sessions for what you ask for and where you correct Claude, then asks Claude (one Sonnet call, usually under 40 cents) for a plain assessment and the best few improvements. Each suggestion has a button: test a catalog capability, draft a skill for testing, save a memory note, create a CLAUDE.md, open a file, or copy a prompt. Below that: what's installed in your Claude now (checked against the files on disk), what's waiting for a decision, every capability's latest result, and every run.
 
 ## Safety
 

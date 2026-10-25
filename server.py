@@ -714,11 +714,11 @@ def summarize(results, judgments, cand):
     if not judgments:
         verdict = "No comparisons completed."
     elif net >= 0.25:
-        verdict = "Worth installing: answers were better with it more often than without."
+        verdict = "Worth keeping: answers were better with it more often than without."
     elif net <= -0.25:
-        verdict = "Better to reject: your current setup did better without it."
+        verdict = "Better to skip: your current setup did better without it."
     else:
-        verdict = "No clear difference. Try different tasks, or reject it."
+        verdict = "No clear difference. Try different tasks, or skip it."
     trigger_note = ""
     if cand.get("skills") or cand.get("agents"):
         trigger_note = "%d of %d runs actually used it." % (trig, len(w))
@@ -859,7 +859,8 @@ FIX_TYPES = {"edit_file", "create_claude_md", "save_memory", "ask_claude"}
 
 def fixes_status():
     """Fixes = repairs to the existing setup: live mechanical issues plus fix-type suggestions, counted once."""
-    live = inventory()["issues"]  # cheap and local, so always current
+    inv = inventory()  # cheap and local, so always current
+    live = inv["issues"]
     files = sorted(glob.glob(os.path.join(CHECKS, "*", "check.json")), reverse=True)
     chk = jload(files[0], None) if files else None
     ops = (chk or {}).get("report", {}).get("opportunities", [])
@@ -885,7 +886,8 @@ def fixes_status():
         for x in chk["inventory"]["issues"]:
             if x["title"] not in live_titles and x["title"] not in done_titles and x["path"] not in covered:
                 done_items.append({"kind": "issue", "title": x["title"], "detail": "Resolved since the check on %s." % chk["id"][:8], "path": x["path"]})
-    return {"open": open_items, "done": done_items, "live_issues": live}
+    return {"open": open_items, "done": done_items, "live_issues": live,
+            "inv": {"always": len(inv["always"]), "on_demand": len(inv["on_demand"])}}
 
 
 # ---------- step 6: adopt / share ----------
